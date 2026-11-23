@@ -34,6 +34,10 @@ final class VC_Settings {
 			'lazyload_skip'     => 2,
 			'enable_js_defer'   => 0,
 			'enable_js_delay'   => 0,
+			'enable_delay_third_party' => 0,
+			'enable_async_css'  => 0,
+			'async_css_excludes' => '*astra-theme-css*',
+			'critical_css'      => '',
 			'enable_cdn'        => 0,
 			'cdn_url'           => '',
 			'preload_urls'      => '',
@@ -110,6 +114,8 @@ final class VC_Settings {
 			'lazyload_iframes',
 			'enable_js_defer',
 			'enable_js_delay',
+			'enable_delay_third_party',
+			'enable_async_css',
 			'enable_cdn',
 			'cache_logged_in',
 			'cache_query',
@@ -127,7 +133,11 @@ final class VC_Settings {
 		$cdn_url = isset( $input['cdn_url'] ) && is_scalar( $input['cdn_url'] ) ? esc_url_raw( trim( (string) $input['cdn_url'] ) ) : '';
 		$clean['cdn_url'] = $cdn_url ? untrailingslashit( $cdn_url ) : '';
 
-		foreach ( array( 'exclude_urls', 'exclude_cookies', 'exclude_css_handles', 'exclude_js_handles', 'preload_urls', 'delay_js_handles' ) as $key ) {
+		$critical_css = isset( $input['critical_css'] ) && is_scalar( $input['critical_css'] ) ? (string) $input['critical_css'] : '';
+		$critical_css = preg_replace( '/<\/?style\b[^>]*>/i', '', $critical_css );
+		$clean['critical_css'] = trim( substr( $critical_css, 0, 20480 ) );
+
+		foreach ( array( 'exclude_urls', 'exclude_cookies', 'exclude_css_handles', 'exclude_js_handles', 'preload_urls', 'delay_js_handles', 'async_css_excludes' ) as $key ) {
 			$raw = isset( $input[ $key ] ) ? $input[ $key ] : '';
 			$clean[ $key ] = implode( "\n", VC_Tools::rule_list( is_scalar( $raw ) ? $raw : '' ) );
 		}

@@ -10,6 +10,11 @@ defined( 'ABSPATH' ) || exit;
 final class VC_Optimizer {
 
 	/**
+	 * Conservative candidates for scripts that rarely affect above-the-fold rendering.
+	 */
+	const DELAY_THIRD_PARTY_RULES = "*recaptcha*\n*googletagmanager*\n*google-analytics*\n*gtag*\n*googleadservices*\n*doubleclick*\n*connect.facebook*\n*static.cloudflareinsights.com/beacon*";
+
+	/**
 	 * 按配置依次执行优化。
 	 *
 	 * @param string $html     HTML 源码。
@@ -25,11 +30,15 @@ final class VC_Optimizer {
 			$html = self::optimize_css( $html, $settings );
 		}
 
+		if ( ! empty( $settings['enable_async_css'] ) ) {
+			$html = self::optimize_css_loading( $html, $settings );
+		}
+
 		if ( ! empty( $settings['enable_js_minify'] ) ) {
 			$html = self::optimize_js( $html, $settings );
 		}
 
-		if ( ! empty( $settings['enable_js_defer'] ) || ! empty( $settings['enable_js_delay'] ) ) {
+		if ( ! empty( $settings['enable_js_defer'] ) || ! empty( $settings['enable_js_delay'] ) || ! empty( $settings['enable_delay_third_party'] ) ) {
 			$html = self::optimize_script_loading( $html, $settings );
 		}
 
@@ -366,6 +375,83 @@ final class VC_Optimizer {
 	}
 
 	/**
+	 * 可选异步加载非关键 CSS，并注入管理员提供的关键 CSS。
+	 *
+	 * @param string $html     HTML。
+	 * @param array  $settings 设置。
+	 * @return string
+	 */
+	private static function optimize_css_loading( $html, $settings ) {
+		$excludes = isset( $settings['async_css_excludes'] ) ? $settings['async_css_excludes'] : '';
+		$count    = preg_match_all( '/<link\b[^>]*>/i', $html, $matches, PREG_OFFSET_CAPTURE );
+		$replacements = array();
+
+		if ( $count ) {
+			foreach ( $matches[0] as $found ) {
+				$tag    = $found[0];
+				$offset = $found[1];
+				if ( ! preg_match( '/\brel\s*=\s*(["\'])stylesheet\1/i', $tag ) || preg_match( '/\b(?:onload|data-vc-async)\b/i', $tag ) ) {
+					continue;
+				}
+				if ( preg_match( '/\bmedia\s*=\s*(["\'])(.*?)\1/i', $tag, $media_match ) && 'all' !== strtolower( trim( $media_match[2] ) ) ) {
+					continue;
+				}
+				if ( ! preg_match( '/\bhref\s*=\s*(["\'])(.*?)\1/i', $tag, $href_match ) ) {
+					continue;
+				}
+
+				$href     = html_entity_decode( $href_match[2], ENT_QUOTES, get_option( 'blog_charset' ) );
+				$identity = $href;
+				if ( preg_match( '/\bid\s*=\s*(["\'])([^"\']+)\1/i', $tag, $id_match ) ) {
+					$identity = $id_match[2];
+				}
+				if ( VC_Tools::match_rules( $href, $excludes ) || VC_Tools::match_rules( $identity, $excludes ) ) {
+					continue;
+				}
+
+				$async = preg_replace(
+					'/\brel\s*=\s*(["\'])stylesheet\1/i',
+					'rel="stylesheet" data-vc-async="1" media="print" onload="this.media=\'all\'"',
+					$tag,
+					1
+				);
+				if ( ! is_string( $async ) || $async === $tag ) {
+					continue;
+				}
+
+				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- noscript fallback in final cached HTML; source link was enqueued by WordPress.
+				$async .= '<noscript><link rel="stylesheet" href="' . esc_attr( $href ) . '"></noscript>';
+				$replacements[] = array( 'offset' => $offset, 'length' => strlen( $tag ), 'value' => $async );
+			}
+		}
+
+		usort(
+			$replacements,
+			static function ( $a, $b ) {
+				return $b['offset'] <=> $a['offset'];
+			}
+		);
+		foreach ( $replacements as $replacement ) {
+			$html = substr_replace( $html, $replacement['value'], $replacement['offset'], $replacement['length'] );
+		}
+
+		$critical = isset( $settings['critical_css'] ) ? trim( (string) $settings['critical_css'] ) : '';
+		if ( '' !== $critical ) {
+			$inline = '<style id="vc-critical-css">' . $critical . '</style>';
+			if ( preg_match( '/<head\b[^>]*>/i', $html, $head_match, PREG_OFFSET_CAPTURE ) ) {
+				$position = $head_match[0][1] + strlen( $head_match[0][0] );
+				$html     = substr_replace( $html, $inline, $position, 0 );
+			} elseif ( false !== stripos( $html, '</head>' ) ) {
+				$html = preg_replace( '/<\/head>/i', $inline . '</head>', $html, 1 );
+			} else {
+				$html = $inline . $html;
+			}
+		}
+
+		return $html;
+	}
+
+	/**
 	 * 使用浏览器原生 LazyLoad，跳过首屏图片和显式排除元素。
 	 *
 	 * @param string $html     HTML。
@@ -427,6 +513,10 @@ final class VC_Optimizer {
 
 		$exclude      = isset( $settings['exclude_js_handles'] ) ? $settings['exclude_js_handles'] : '';
 		$delay_rules  = isset( $settings['delay_js_handles'] ) ? $settings['delay_js_handles'] : '';
+		if ( ! empty( $settings['enable_delay_third_party'] ) ) {
+			$delay_rules .= "\n" . self::DELAY_THIRD_PARTY_RULES;
+		}
+		$delay_enabled = ! empty( $settings['enable_js_delay'] ) || ! empty( $settings['enable_delay_third_party'] );
 		$replacements = array();
 		$delayed      = false;
 
@@ -441,6 +531,19 @@ final class VC_Optimizer {
 			if ( preg_match( '/\b(?:async|defer|nomodule)\b/i', $open ) || preg_match( '/\btype\s*=\s*(["\'])(?:module|application\/json|text\/template)\1/i', $open ) ) {
 				continue;
 			}
+			$inline_end = strrpos( $full, '</script>' );
+			if ( $delay_enabled && false !== $inline_end && $inline_end > strlen( $open ) ) {
+				$body = substr( $full, strlen( $open ), $inline_end - strlen( $open ) );
+				if ( '' !== trim( $body ) && strlen( $body ) <= 8000 && VC_Tools::match_rules( $body, $delay_rules ) ) {
+					$without_type = preg_replace( '/\s+type\s*=\s*(["\']).*?\1/i', '', $open );
+					// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Inline loader is deferred inside final cached HTML after the enqueue phase.
+					$new_open = '<script type="velocity-lazy-inline" data-vc-delay="1" data-vc-inline="' . base64_encode( $body ) . '"' . substr( $without_type, 7 );
+					$replacements[] = array( 'offset' => $offset, 'length' => strlen( $full ), 'value' => $new_open . '</script>' );
+					$delayed = true;
+					continue;
+				}
+			}
+
 			if ( ! preg_match( '/\bsrc\s*=\s*(["\'])(.*?)\1/i', $open, $src_match, PREG_OFFSET_CAPTURE ) ) {
 				continue;
 			}
@@ -451,7 +554,7 @@ final class VC_Optimizer {
 				$identity = $id_match[2];
 			}
 
-			$delay = ! empty( $settings['enable_js_delay'] ) && ( VC_Tools::match_rules( $src, $delay_rules ) || VC_Tools::match_rules( $identity, $delay_rules ) );
+			$delay = $delay_enabled && ( VC_Tools::match_rules( $src, $delay_rules ) || VC_Tools::match_rules( $identity, $delay_rules ) );
 			if ( $delay ) {
 				$without_src = substr_replace( $open, '', $src_match[0][1], strlen( $src_match[0][0] ) );
 				$without_src = preg_replace( '/\s+type\s*=\s*(["\']).*?\1/i', '', $without_src );
@@ -479,7 +582,7 @@ final class VC_Optimizer {
 		}
 
 		if ( $delayed ) {
-			$bootstrap = '<script id="vc-delay-bootstrap">(function(){var done=false;function load(){if(done)return;done=true;var nodes=document.querySelectorAll("script[data-vc-delay][data-vc-src]");Array.prototype.forEach.call(nodes,function(old){var s=document.createElement("script");Array.prototype.forEach.call(old.attributes,function(a){if(a.name!=="type"&&a.name!=="data-vc-delay"&&a.name!=="data-vc-src")s.setAttribute(a.name,a.value);});s.async=false;s.src=old.getAttribute("data-vc-src");old.parentNode.insertBefore(s,old);old.parentNode.removeChild(old);});}["mousemove","keydown","scroll","touchstart","click"].forEach(function(e){document.addEventListener(e,load,{once:true,passive:true});});window.setTimeout(load,5000);})();</script>';
+			$bootstrap = '<script id="vc-delay-bootstrap">(function(){var done=false;function load(){if(done)return;done=true;var nodes=document.querySelectorAll("script[data-vc-delay][data-vc-src],script[data-vc-delay][data-vc-inline]");Array.prototype.forEach.call(nodes,function(old){var s=document.createElement("script");Array.prototype.forEach.call(old.attributes,function(a){if(a.name!=="type"&&a.name!=="data-vc-delay"&&a.name!=="data-vc-src"&&a.name!=="data-vc-inline")s.setAttribute(a.name,a.value);});var inline=old.getAttribute("data-vc-inline");if(inline){var raw=atob(inline),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++){bytes[i]=raw.charCodeAt(i);}s.textContent=new TextDecoder().decode(bytes);}else{s.async=false;s.src=old.getAttribute("data-vc-src");}old.parentNode.insertBefore(s,old);old.parentNode.removeChild(old);});}["mousemove","keydown","scroll","touchstart","click"].forEach(function(e){document.addEventListener(e,load,{once:true,passive:true});});window.setTimeout(load,5000);})();</script>';
 			$pos       = stripos( $html, '</body>' );
 			$html      = false === $pos ? $html . $bootstrap : substr_replace( $html, $bootstrap, $pos, 0 );
 		}
