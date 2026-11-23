@@ -119,6 +119,13 @@ admin/                          设置页视图与静态资源
 
 ## 更新记录
 
+### 1.3.0
+
+- 根据 PageSpeed 桌面报告新增常见第三方脚本延迟预设：reCAPTCHA、GTag/GTM、Google Ads、Facebook Pixel、Cloudflare Beacon。
+- 新增可选 CSS 异步加载，默认保留 Astra 主样式阻塞加载，并提供 noscript 回退。
+- 支持填写首屏关键 CSS，注入到 head。
+- 所有新功能默认关闭，避免影响表单、统计和主题布局。
+
 ### 1.2.1
 
 - 准备 WordPress.org 官方提交版本。
