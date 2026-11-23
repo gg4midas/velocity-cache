@@ -1,0 +1,23 @@
+.vc-wrap {
+	max-width: 960px;
+}
+
+.vc-wrap .form-table th {
+	width: 220px;
+}
+
+.vc-tools {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin: 16px 0 24px;
+}
+
+.vc-tools form {
+	margin: 0;
+}
+
+.vc-status th {
+	width: 220px;
+	text-align: left;
+}

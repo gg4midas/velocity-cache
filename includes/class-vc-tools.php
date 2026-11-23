@@ -1,0 +1,735 @@
+<?php
+/**
+ * 通用工具：路径、文件、日志、排除规则与压缩算法。
+ *
+ * @package VelocityCache
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+final class VC_Tools {
+
+	const CACHE_REL = '/cache/velocity-cache';
+
+	/**
+	 * 插件激活：初始化选项与缓存目录。
+	 */
+	public static function activate() {
+		if ( false === get_option( 'vc_settings', false ) ) {
+			add_option( 'vc_settings', VC_Settings::defaults(), '', 'yes' );
+		}
+
+		self::ensure_dirs();
+		self::log( 'plugin activated' );
+	}
+
+	/**
+	 * 插件停用：清空缓存，保留设置。
+	 */
+	public static function deactivate() {
+		self::purge_dir( 'pages' );
+		self::purge_dir( 'assets' );
+		self::log( 'plugin deactivated, caches purged' );
+	}
+
+	/**
+	 * 缓存根目录（绝对路径，无尾斜杠）。
+	 *
+	 * @return string
+	 */
+	public static function cache_root() {
+		return rtrim( wp_normalize_path( WP_CONTENT_DIR . self::CACHE_REL ), '/' );
+	}
+
+	/**
+	 * 缓存目录 URL（带尾斜杠）。
+	 *
+	 * @return string
+	 */
+	public static function cache_base_url() {
+		return trailingslashit( content_url( self::CACHE_REL . '/' ) );
+	}
+
+	/**
+	 * 构造缓存内的子路径，强制白名单字符与去尾斜杠。
+	 *
+	 * @param string $sub      一级子目录：pages / assets / logs。
+	 * @param string $relative 相对路径。
+	 * @return string
+	 */
+	public static function sub_path( $sub, $relative = '' ) {
+		$sub      = strtolower( preg_replace( '/[^a-zA-Z0-9_-]/', '', $sub ) );
+		$relative = preg_replace( '/[^a-zA-Z0-9_\/.-]/', '', (string) $relative );
+		$relative = str_replace( '..', '', $relative );
+
+		$path = self::cache_root() . '/' . $sub;
+		if ( '' !== $relative ) {
+			$path .= '/' . ltrim( $relative, '/' );
+		}
+
+		return wp_normalize_path( $path );
+	}
+
+	/**
+	 * 创建并加固目录，写入索引文件与禁止列表的 .htaccess。
+	 *
+	 * @param string $dir 绝对路径。
+	 * @return bool
+	 */
+	public static function ensure_dir( $dir ) {
+		$dir  = wp_normalize_path( $dir );
+		$root = self::cache_root();
+
+		if ( '' === $dir || ( $dir !== $root && strpos( $dir, $root . '/' ) !== 0 ) ) {
+			return false;
+		}
+
+		if ( ! wp_mkdir_p( $dir ) || ! is_dir( $dir ) ) {
+			return false;
+		}
+
+		if ( ! file_exists( $dir . '/index.php' ) ) {
+			@file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" );
+		}
+
+		if ( ! file_exists( $dir . '/.htaccess' ) ) {
+			@file_put_contents(
+				$dir . '/.htaccess',
+				"Options -Indexes\n<FilesMatch \"\\.(?:php|phtml|phar)$\">\n<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n</IfModule>\n</FilesMatch>\n"
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * 初始化全部缓存子目录。
+	 */
+	public static function ensure_dirs() {
+		$dirs = array(
+			self::sub_path( 'pages' ),
+			self::sub_path( 'assets', 'css' ),
+			self::sub_path( 'assets', 'js' ),
+			self::sub_path( 'logs' ),
+		);
+
+		foreach ( $dirs as $dir ) {
+			self::ensure_dir( $dir );
+		}
+	}
+
+	/**
+	 * 写入缓存文件（临时文件 + 原子重命名）。
+	 *
+	 * @param string $file 绝对路径。
+	 * @param string $data 内容。
+	 * @return true|WP_Error
+	 */
+	public static function write_file( $file, $data ) {
+		$dir = dirname( $file );
+		if ( ! self::ensure_dir( $dir ) ) {
+			return new WP_Error( 'vc_dir_not_writable', '缓存目录不可写：' . $dir );
+		}
+
+		$suffix = function_exists( 'random_bytes' ) ? bin2hex( random_bytes( 4 ) ) : wp_generate_password( 8, false, false );
+		$tmp    = $file . '.tmp.' . $suffix;
+
+		if ( false === @file_put_contents( $tmp, $data, LOCK_EX ) ) {
+			@unlink( $tmp );
+			return new WP_Error( 'vc_write_failed', '缓存文件写入失败：' . $file );
+		}
+
+		if ( ! @rename( $tmp, $file ) ) {
+			@unlink( $tmp );
+			return new WP_Error( 'vc_rename_failed', '缓存文件替换失败：' . $file );
+		}
+
+		return true;
+	}
+
+	/**
+	 * 安全清空某个缓存子目录（只删除文件，不删除目录本身）。
+	 *
+	 * @param string $sub 子目录名。
+	 * @return true|WP_Error
+	 */
+	public static function purge_dir( $sub ) {
+		$dir = self::sub_path( $sub );
+		if ( ! is_dir( $dir ) ) {
+			return true;
+		}
+
+		$root = self::cache_root();
+		$dir  = rtrim( wp_normalize_path( $dir ), '/' );
+		if ( '' === $sub || strpos( $dir, $root . '/' ) !== 0 ) {
+			return new WP_Error( 'vc_unsafe_path', '拒绝清理非插件缓存目录。' );
+		}
+
+		$items = @scandir( $dir );
+		if ( ! is_array( $items ) ) {
+			return new WP_Error( 'vc_scan_failed', '无法读取缓存目录：' . $dir );
+		}
+
+		foreach ( $items as $item ) {
+			if ( '.' === $item || '..' === $item ) {
+				continue;
+			}
+
+			$path = wp_normalize_path( $dir . '/' . $item );
+			if ( is_dir( $path ) && ! is_link( $path ) ) {
+				self::remove_nested( $path, $dir );
+			} else {
+				@unlink( $path );
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * 递归删除嵌套目录，始终限定在给定父目录之内。
+	 *
+	 * @param string $dir  当前目录。
+	 * @param string $root 允许的父目录。
+	 * @return void
+	 */
+	private static function remove_nested( $dir, $root ) {
+		$dir = rtrim( wp_normalize_path( $dir ), '/' );
+		$root = rtrim( wp_normalize_path( $root ), '/' );
+
+		if ( strpos( $dir, $root . '/' ) !== 0 || ! is_dir( $dir ) ) {
+			return;
+		}
+
+		$items = @scandir( $dir );
+		if ( is_array( $items ) ) {
+			foreach ( $items as $item ) {
+				if ( '.' === $item || '..' === $item ) {
+					continue;
+				}
+				$path = wp_normalize_path( $dir . '/' . $item );
+				if ( is_dir( $path ) && ! is_link( $path ) ) {
+					self::remove_nested( $path, $root );
+				} else {
+					@unlink( $path );
+				}
+			}
+		}
+
+		@rmdir( $dir );
+	}
+
+	/**
+	 * 记录错误日志（仅设置开启时写入）。
+	 *
+	 * @param string $message 日志内容。
+	 * @param array  $context 附加上下文。
+	 */
+	public static function log( $message, $context = array() ) {
+		$settings = VC_Settings::get();
+		if ( empty( $settings['log_errors'] ) ) {
+			return;
+		}
+
+		$file = self::sub_path( 'logs', 'errors.log' );
+		if ( ! self::ensure_dir( dirname( $file ) ) ) {
+			return;
+		}
+
+		if ( is_file( $file ) && filesize( $file ) > 1048576 ) {
+			@rename( $file, $file . '.old' );
+		}
+
+		$extra = empty( $context ) ? '' : ' | ' . (string) wp_json_encode( $context );
+		$line  = gmdate( 'Y-m-d H:i:s' ) . ' ' . sanitize_text_field( (string) $message ) . $extra . "\n";
+		@file_put_contents( $file, $line, FILE_APPEND | LOCK_EX );
+	}
+
+	/**
+	 * 判断当前请求是否为可优化的前端 HTML 请求。
+	 *
+	 * @return bool
+	 */
+	public static function is_frontend() {
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() ) {
+			return false;
+		}
+
+		if ( ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+			return false;
+		}
+
+		if ( ! isset( $_SERVER['REQUEST_METHOD'] ) || 'GET' !== strtoupper( $_SERVER['REQUEST_METHOD'] ) ) {
+			return false;
+		}
+
+		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) parse_url( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '';
+		$path = strtolower( $path );
+
+		if ( '' === $path || preg_match( '#/(?:wp-admin|wp-login\.php|xmlrpc\.php)(?:/|$)#', $path ) ) {
+			return false;
+		}
+
+		if ( is_feed() || is_trackback() || is_preview() || is_404() ) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * 生成当前请求的缓存键。
+	 *
+	 * @param bool $with_query 是否把查询串计入缓存键。
+	 * @return string
+	 */
+	public static function request_key( $with_query ) {
+		$scheme = is_ssl() ? 'https' : 'http';
+		$host   = isset( $_SERVER['HTTP_HOST'] ) ? strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ) : (string) wp_parse_url( home_url(), PHP_URL_HOST );
+		$uri    = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '/';
+		$path   = (string) parse_url( $uri, PHP_URL_PATH );
+		$query  = $with_query ? (string) parse_url( $uri, PHP_URL_QUERY ) : '';
+
+		return md5( $scheme . '|' . $host . '|' . $path . '|' . $query );
+	}
+
+	/**
+	 * 解析规则列表（每行一条，最多 100 条）。
+	 *
+	 * @param string $raw 原始文本。
+	 * @return array
+	 */
+	public static function rule_list( $raw ) {
+		$lines = explode( "\n", (string) $raw );
+		$rules = array();
+
+		foreach ( $lines as $line ) {
+			$line = trim( sanitize_text_field( $line ) );
+			if ( '' === $line ) {
+				continue;
+			}
+			$rules[] = substr( $line, 0, 255 );
+			if ( count( $rules ) >= 100 ) {
+				break;
+			}
+		}
+
+		return $rules;
+	}
+
+	/**
+	 * 通配符匹配：支持 * 与 ?。
+	 *
+	 * @param string $value   待匹配值。
+	 * @param string $raw     规则文本。
+	 * @return bool
+	 */
+	public static function match_rules( $value, $raw ) {
+		$value = (string) $value;
+		foreach ( self::rule_list( $raw ) as $rule ) {
+			$pattern = str_replace( array( '\*', '\?' ), array( '.*', '.' ), preg_quote( $rule, '~' ) );
+			if ( @preg_match( '~^' . $pattern . '$~i', $value ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * 检查当前请求的 Cookie 是否命中排除规则。
+	 *
+	 * @param string $raw 规则文本。
+	 * @return bool
+	 */
+	public static function has_excluded_cookie( $raw ) {
+		$rules = self::rule_list( $raw );
+		if ( empty( $rules ) ) {
+			return false;
+		}
+
+		foreach ( array_keys( $_COOKIE ) as $name ) {
+			if ( self::match_rules( (string) $name, $raw ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * 把站内资源 URL 解析为本地文件路径，拒绝站外与越界路径。
+	 *
+	 * @param string $url 资源 URL。
+	 * @return string 本地绝对路径，失败返回空串。
+	 */
+	public static function local_file( $url ) {
+		$parts = wp_parse_url( $url );
+		if ( ! is_array( $parts ) || empty( $parts['path'] ) ) {
+			return '';
+		}
+
+		$home = wp_parse_url( home_url( '/' ) );
+		$host = isset( $parts['host'] ) ? strtolower( $parts['host'] ) : ( isset( $home['host'] ) ? strtolower( $home['host'] ) : '' );
+		if ( ! $host || ! isset( $home['host'] ) || $host !== strtolower( $home['host'] ) ) {
+			return '';
+		}
+
+		$path = rawurldecode( $parts['path'] );
+		if ( preg_match( '#(?:^|/)\.\.(?:/|$)#', $path ) || false !== strpos( $path, "\0" ) ) {
+			return '';
+		}
+
+		$candidates   = array();
+		$content_path = wp_parse_url( content_url( '/' ), PHP_URL_PATH );
+		$plugin_path  = wp_parse_url( plugins_url( '/' ), PHP_URL_PATH );
+
+		if ( is_string( $content_path ) && '' !== $content_path && 0 === strpos( $path, rtrim( $content_path, '/' ) ) ) {
+			$candidates[] = WP_CONTENT_DIR . substr( $path, strlen( rtrim( $content_path, '/' ) ) );
+		}
+
+		if ( is_string( $plugin_path ) && '' !== $plugin_path && 0 === strpos( $path, rtrim( $plugin_path, '/' ) ) ) {
+			$candidates[] = WP_PLUGIN_DIR . substr( $path, strlen( rtrim( $plugin_path, '/' ) ) );
+		}
+
+		$candidates[] = ABSPATH . ltrim( $path, '/' );
+
+		$allowed = array_filter( array( realpath( WP_CONTENT_DIR ), realpath( ABSPATH ) ) );
+		foreach ( $candidates as $candidate ) {
+			$real = realpath( $candidate );
+			if ( ! $real || ! is_file( $real ) || ! is_readable( $real ) ) {
+				continue;
+			}
+			foreach ( $allowed as $base ) {
+				if ( 0 === strpos( $real, rtrim( $base, '/' ) . '/' ) ) {
+					return $real;
+				}
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * 把 CSS 中的相对 URL 改写为绝对路径。
+	 *
+	 * @param string $css        CSS 源码。
+	 * @param string $source_url 原始 CSS 文件 URL。
+	 * @return string
+	 */
+	public static function absolutize_css( $css, $source_url ) {
+		return preg_replace_callback(
+			'/url\(\s*(["\']?)([^"\')]+)\1\s*\)/i',
+			static function ( $matches ) use ( $source_url ) {
+				$value = trim( $matches[2] );
+				if ( '' === $value || '#' === $value[0] || 0 === stripos( $value, 'data:' ) || preg_match( '~^(?:https?:)?//~i', $value ) ) {
+					return $matches[0];
+				}
+
+				return 'url(' . $matches[1] . self::resolve_url( $source_url, $value ) . $matches[1] . ')';
+			},
+			$css
+		);
+	}
+
+	/**
+	 * 基于基准 URL 解析相对地址。
+	 *
+	 * @param string $base 基准 URL。
+	 * @param string $rel  相对地址。
+	 * @return string
+	 */
+	public static function resolve_url( $base, $rel ) {
+		$parts = wp_parse_url( $base );
+		if ( ! is_array( $parts ) ) {
+			return $rel;
+		}
+
+		if ( 0 === strpos( $rel, '/' ) ) {
+			return ( isset( $parts['scheme'] ) ? $parts['scheme'] : 'https' ) . '://' . ( isset( $parts['host'] ) ? $parts['host'] : '' ) . $rel;
+		}
+
+		$dir = isset( $parts['path'] ) ? preg_replace( '#/[^/]*$#', '', $parts['path'] ) : '';
+		$all = $dir . '/' . $rel;
+		$out = array();
+
+		foreach ( explode( '/', $all ) as $segment ) {
+			if ( '' === $segment || '.' === $segment ) {
+				continue;
+			}
+			if ( '..' === $segment ) {
+				array_pop( $out );
+				continue;
+			}
+			$out[] = $segment;
+		}
+
+		$scheme = isset( $parts['scheme'] ) ? $parts['scheme'] : 'https';
+		$host   = isset( $parts['host'] ) ? $parts['host'] : '';
+
+		return $scheme . '://' . $host . '/' . implode( '/', $out );
+	}
+
+	/**
+	 * 把源码切成代码段与字符串段，压缩时保护字符串与正则字面量。
+	 *
+	 * @param string $input 源码。
+	 * @param string $mode  css 或 js。
+	 * @return array
+	 */
+	private static function scan_tokens( $input, $mode ) {
+		$tokens = array();
+		$code   = '';
+		$len    = strlen( $input );
+		$i      = 0;
+
+		$flush = static function () use ( &$code, &$tokens ) {
+			if ( '' !== $code ) {
+				$tokens[] = array( 'c', $code );
+				$code     = '';
+			}
+		};
+
+		while ( $i < $len ) {
+			$ch   = $input[ $i ];
+			$next = $i + 1 < $len ? $input[ $i + 1 ] : '';
+
+			if ( '/' === $ch && '*' === $next ) {
+				$end = strpos( $input, '*/', $i + 2 );
+				$i   = false === $end ? $len : $end + 2;
+				$code .= ' ';
+				continue;
+			}
+
+			if ( 'js' === $mode && '/' === $ch && '/' === $next ) {
+				$end = strpos( $input, "\n", $i + 2 );
+				$i   = false === $end ? $len : $end;
+				$code .= ' ';
+				continue;
+			}
+
+			if ( '"' === $ch || "'" === $ch || ( 'js' === $mode && '`' === $ch ) ) {
+				$flush();
+				$quote = $ch;
+				$str   = $ch;
+				$i++;
+				while ( $i < $len ) {
+					$c = $input[ $i ];
+					$str .= $c;
+					if ( '\\' === $c && $i + 1 < $len ) {
+						$str .= $input[ $i + 1 ];
+						$i += 2;
+						continue;
+					}
+					$i++;
+					if ( $c === $quote ) {
+						break;
+					}
+				}
+				$tokens[] = array( 's', $str );
+				continue;
+			}
+
+			if ( 'js' === $mode && '/' === $ch && self::regex_can_start( $code ) ) {
+				$flush();
+				$str      = '/';
+				$i++;
+				$in_class = false;
+				while ( $i < $len ) {
+					$c = $input[ $i ];
+					$str .= $c;
+					if ( '\\' === $c && $i + 1 < $len ) {
+						$str .= $input[ $i + 1 ];
+						$i += 2;
+						continue;
+					}
+					if ( '[' === $c ) {
+						$in_class = true;
+					}
+					if ( ']' === $c ) {
+						$in_class = false;
+					}
+					if ( '/' === $c && ! $in_class ) {
+						$i++;
+						while ( $i < $len && ctype_alpha( $input[ $i ] ) ) {
+							$str .= $input[ $i ];
+							$i++;
+						}
+						break;
+					}
+					$i++;
+				}
+				$tokens[] = array( 's', $str );
+				continue;
+			}
+
+			$code .= $ch;
+			$i++;
+		}
+
+		$flush();
+
+		return $tokens;
+	}
+
+	/**
+	 * 判断当前位置是否可以开始 JS 正则字面量。
+	 *
+	 * @param string $code 已累积代码。
+	 * @return bool
+	 */
+	private static function regex_can_start( $code ) {
+		$trimmed = rtrim( $code );
+		if ( '' === $trimmed ) {
+			return true;
+		}
+
+		$last = substr( $trimmed, -1 );
+		if ( false !== strpos( '=([{,:;!&|?+-*%~^<>', $last ) ) {
+			return true;
+		}
+
+		$keywords = array( 'return', 'case', 'throw', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'yield', 'await', 'else', 'do' );
+		foreach ( $keywords as $keyword ) {
+			if ( preg_match( '~\b' . preg_quote( $keyword, '~' ) . '$~i', $trimmed ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * CSS 压缩。
+	 *
+	 * @param string $css 源码。
+	 * @return string
+	 */
+	public static function minify_css( $css ) {
+		if ( ! is_string( $css ) || '' === $css ) {
+			return $css;
+		}
+
+		$out = '';
+		foreach ( self::scan_tokens( $css, 'css' ) as $token ) {
+			if ( 's' === $token[0] ) {
+				$out .= $token[1];
+				continue;
+			}
+			$code = preg_replace( '/\s+/', ' ', $token[1] );
+			$code = preg_replace( '/\s*([{}:;,>])\s*/', '$1', $code );
+			$code = preg_replace( '/;\s*}/', '}', $code );
+			$out .= $code;
+		}
+
+		return trim( $out );
+	}
+
+	/**
+	 * JavaScript 压缩（保守策略，保护字符串、模板字符串、正则与注释中的 URL）。
+	 *
+	 * @param string $js 源码。
+	 * @return string
+	 */
+	public static function minify_js( $js ) {
+		if ( ! is_string( $js ) || '' === $js ) {
+			return $js;
+		}
+
+		$out = '';
+		foreach ( self::scan_tokens( $js, 'js' ) as $token ) {
+			if ( 's' === $token[0] ) {
+				$out .= $token[1];
+				continue;
+			}
+			$code = preg_replace( '/\s+/', ' ', $token[1] );
+			$code = preg_replace( '/\s*([{}();,:=])\s*/', '$1', $code );
+			$code = preg_replace( '/;(\s*)}/', '}', $code );
+			$out .= $code;
+		}
+
+		return trim( $out );
+	}
+
+	/**
+	 * HTML 压缩，保留预格式化标签与脚本/样式内容。
+	 *
+	 * @param string $html HTML 源码。
+	 * @return string
+	 */
+	public static function minify_html( $html ) {
+		if ( ! is_string( $html ) || '' === $html ) {
+			return $html;
+		}
+
+		$parts = preg_split(
+			'/(<(?:pre|textarea|script|style)\b[^>]*>.*?<\/(?:pre|textarea|script|style)>)/is',
+			$html,
+			-1,
+			PREG_SPLIT_DELIM_CAPTURE
+		);
+
+		if ( ! is_array( $parts ) ) {
+			return $html;
+		}
+
+		foreach ( $parts as $index => $part ) {
+			if ( 1 === $index % 2 ) {
+				continue;
+			}
+
+			$part = preg_replace( '/<!--(?!\[if\b).*?-->/s', '', $part );
+			$part = preg_replace( '/>\s+</', '><', $part );
+			$part = preg_replace( '/[ \t]+/', ' ', $part );
+			$part = preg_replace( '/\s*\n\s*/', "\n", $part );
+			$part = preg_replace( '/\n{2,}/', "\n", $part );
+
+			$parts[ $index ] = $part;
+		}
+
+		return trim( implode( '', $parts ) );
+	}
+
+	/**
+	 * 统计某缓存目录下的文件数量。
+	 *
+	 * @param string $sub 子目录。
+	 * @return int
+	 */
+	public static function count_files( $sub ) {
+		$dir = self::sub_path( $sub );
+		if ( ! is_dir( $dir ) ) {
+			return 0;
+		}
+
+		$count = 0;
+		$items = @scandir( $dir );
+		if ( ! is_array( $items ) ) {
+			return 0;
+		}
+
+		foreach ( $items as $item ) {
+			if ( '.' === $item || '..' === $item || 'index.php' === $item || '.htaccess' === $item ) {
+				continue;
+			}
+			$path = $dir . '/' . $item;
+			if ( is_file( $path ) ) {
+				$count++;
+			} elseif ( is_dir( $path ) ) {
+				$nested = @scandir( $path );
+				if ( is_array( $nested ) ) {
+					foreach ( $nested as $child ) {
+						if ( '.' === $child || '..' === $child ) {
+							continue;
+						}
+						if ( is_file( $path . '/' . $child ) ) {
+							$count++;
+						}
+					}
+				}
+			}
+		}
+
+		return $count;
+	}
+}
