@@ -1,10 +1,10 @@
 === Velocity Cache ===
 Contributors: gg4midas
-Tags: cache, performance, minify, optimization, pagespeed
+Tags: cache, performance, minify, optimization, pagespeed, page-cache, css, javascript, html, woocommerce, speed, core-web-vitals
 Requires at least: 5.8
-Tested up to: 6.7
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -52,6 +52,13 @@ Velocity Cache 是一套独立的 WordPress 性能优化实现，不依赖、不
 在设置页点击「清理缓存」；内容更新、主题切换、菜单更新时页面缓存也会自动失效。
 
 == Changelog ==
+
+= 1.1.0 =
+* 在插件列表页增加「设置」快捷入口。
+* 设置注册提前到 init，程序化更新也能触发过滤与缓存刷新。
+* 修正登录 Cookie 排除规则缺少通配符的问题。
+* CSS 改写无收益时保留原标签，避免体积变大。
+* 完善 README 文档与仓库检索信息。
 
 = 1.0.0 =
 * 初始版本：页面缓存、HTML/CSS/JS 优化、排除规则、版本控制与管理页面。

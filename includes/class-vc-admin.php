@@ -19,6 +19,7 @@ final class VC_Admin {
 		add_action( 'admin_menu', array( $this, 'add_page' ) );
 		add_action( 'init', array( 'VC_Settings', 'register' ) );
 		add_action( 'admin_init', array( $this, 'register_fields' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( VC_FILE ), array( $this, 'plugin_action_links' ) );
 		add_action( 'admin_post_vc_purge_cache', array( $this, 'handle_purge' ) );
 		add_action( 'admin_post_vc_bump_version', array( $this, 'handle_bump' ) );
 		add_action( 'admin_notices', array( $this, 'notices' ) );
@@ -36,6 +37,23 @@ final class VC_Admin {
 			VC_Settings::PAGE,
 			array( $this, 'render_page' )
 		);
+	}
+
+	/**
+	 * 在插件列表的操作列增加设置入口。
+	 *
+	 * @param array $links 现有操作链接。
+	 * @return array
+	 */
+	public function plugin_action_links( $links ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return $links;
+		}
+
+		$url = admin_url( 'options-general.php?page=' . VC_Settings::PAGE );
+		array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( '设置', 'velocity-cache' ) . '</a>' );
+
+		return $links;
 	}
 
 	/**
