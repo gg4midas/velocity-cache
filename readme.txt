@@ -1,81 +1,87 @@
 === Velocity Cache ===
-Contributors: gg4midas
-Tags: cache, performance, minify, optimization, pagespeed, page-cache, css, javascript, html, woocommerce, speed, core-web-vitals
+Contributors: gg4mida0025
+Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-轻量级 WordPress 性能优化插件：页面缓存、HTML 压缩、CSS 压缩与合并、JavaScript 压缩。
+Lightweight WordPress caching and optimization: page cache, minification, preloading, lazy loading, and cache versioning.
 
 == Description ==
 
-Velocity Cache 是一套独立的 WordPress 性能优化实现，不依赖、不复制任何商业缓存插件的代码、品牌或界面。
+Velocity Cache is an independent WordPress performance plugin. It generates static HTML for anonymous visitors, optimizes local assets, and gives site owners explicit control over cache invalidation and exclusions. It does not require a commercial service, cloud account, or API key.
 
-功能：
+= Key features =
 
-* 页面缓存：仅对匿名访客的 GET 请求生成静态 HTML，支持 TTL、关联清除、预加载、304 与 Brotli/Gzip 预压缩。
-* HTML 压缩：移除注释与冗余空白，保留 `<pre>`、`<textarea>`、`<script>`、`<style>` 内容。
-* CSS 优化：可单独开启压缩、合并；只合并相邻且 media 相同的样式表，保持级联顺序，并自动把相对 URL 绝对化。
-* JavaScript 优化：本地脚本与内联脚本压缩，支持可选 Defer 和按规则 Delay JS。
-* 加载优化：原生图片/iframe LazyLoad、首屏图片跳过、CDN 静态地址重写。
-* 文件版本控制：设置变更或手动操作会递增资源版本号，并写入资源 URL 与缓存文件名。
-* 排除规则：按 URL（支持 `*` 通配符）、Cookie 名、CSS/JS 关键词排除。
-* 安全与健壮性：能力检查、nonce、输入过滤、路径白名单、异常捕获与错误日志。
+* Page caching: static HTML for anonymous GET requests, with TTL, exclusion rules, conditional requests, and manual purge.
+* Cache preloading: build a queue from custom URLs or common sitemaps and process it in small WP-Cron batches. Only URLs on the current site host are accepted.
+* Selective purge: when enabled, editing a post clears its permalink, the home page, and related archives instead of every cached page.
+* Asset optimization: conservative HTML, CSS, and JavaScript minification. Local CSS files may be combined only when they are adjacent and share the same media attribute, preserving cascade order.
+* Loading optimization: native image and iframe lazy loading, configurable first-image skipping, optional script deferral, and rule-based delayed JavaScript.
+* CDN rewriting: optionally rewrite local static asset URLs while leaving page links and dynamic endpoints unchanged.
+* Versioning: each settings change increments the asset version and refreshes cached pages.
+* Safety: capability checks, nonces, input sanitization, output escaping, path whitelists, atomic cache writes, and an error log.
 
-缓存文件写入 `wp-content/cache/velocity-cache/`，卸载插件时自动清理。
+All advanced features are optional and disabled by default. Preloading performs server-side requests only to the same site host and is enabled only by the site administrator. The plugin does not track visitors, phone home, or download executable code.
 
 == Installation ==
 
-1. 将插件目录上传至 `wp-content/plugins/velocity-cache/`。
-2. 在「插件」页面启用 Velocity Cache。
-3. 进入「设置 → Velocity Cache」按需开启功能并保存。
-4. 确认 `wp-content/` 可写；若不可写，设置页会给出提示，页面缓存与资源优化会自动降级为不写入。
+1. Upload the plugin folder to `wp-content/plugins/velocity-cache/`, or install it from the WordPress Plugins screen.
+2. Activate Velocity Cache.
+3. Go to Settings > Velocity Cache and enable the features you need.
+4. Make sure `wp-content/` is writable. If it is not, cache writes are skipped and failures are logged when logging is enabled.
 
 == Frequently Asked Questions ==
 
-= 会和已有缓存插件冲突吗？ =
+= Does the plugin cache logged-in users? =
 
-插件不使用 `advanced-cache.php` drop-in，也不劫持其他插件的缓存目录。如果两个插件都开启页面缓存，建议只保留一个，否则可能出现重复缓冲。
+By default, no. If enabled, cache keys are isolated by user ID and cached responses use `Cache-Control: private`. Remove the login cookie exclusion rule before using this option, and avoid it on pages with personalized content.
 
-= 为什么登录用户没有被缓存？ =
+= Why are my stylesheets not combined? =
 
-默认只缓存匿名访客。如确需缓存登录用户，请开启「缓存已登录用户」并移除登录 Cookie 排除规则。缓存按用户 ID 隔离，个性化页面仍应谨慎开启。
+Stylesheets are combined only when they are adjacent in the HTML and share the same media attribute. This prevents changes to CSS cascade order. Stylesheets separated by inline styles, scripts, or other elements are intentionally left in place.
 
-= 合并 CSS 后图片路径失效怎么办？ =
+= What does Delay JS do? =
 
-插件在合并时会把 `url()` 中的相对路径改写为基于原始 CSS 文件 URL 的绝对路径。若样式表使用了 `@import`，该文件会跳过合并以保持原有语义。
+Delay JS only affects scripts matching the configured rules. Matching external scripts are loaded after the first user interaction or after five seconds. Leave the rules empty to disable delayed execution.
 
-= 如何完全清理缓存？ =
+= Does preloading contact external sites? =
 
-在设置页点击「清理缓存」；内容更新、主题切换、菜单更新时页面缓存也会自动失效。
+No. Preloading only requests URLs on the current site host. Custom URLs on other hosts are rejected, and sitemap discovery is limited to two common local sitemap paths.
+
+= How do I clear all cached content? =
+
+Use the cache tools on the plugin settings page. Page caches also expire according to the configured TTL and are purged when relevant content or settings change.
+
+= Are form nonces affected by page caching? =
+
+Cached HTML contains the nonce generated when the page was built. If a form fails because its nonce expired, purge the cache and reload the page.
 
 == Changelog ==
 
+= 1.2.1 =
+* Prepared the plugin for submission to the WordPress.org Plugin Directory.
+* Replaced direct file deletion and URL parsing with WordPress APIs where appropriate.
+* Improved output escaping, input sanitization, and translator comments.
+* Removed the unnecessary textdomain loader and added a languages directory.
+* Added the GPLv2 license file and an English readme.
+
 = 1.2.0 =
-* 新增站点地图/自定义 URL 预加载队列，WP-Cron 分批执行并显示结果。
-* 新增文章关联清除、ETag/Last-Modified 304、Brotli/Gzip 预压缩。
-* 新增原生图片与 iframe LazyLoad、首屏图片跳过数。
-* 新增 JavaScript Defer、按规则 Delay JS 和本地静态资源 CDN 重写。
-* 修正 JS 压缩后 script 标签重复 src、CDN 目录映射及 WordPress 304 状态头。
-* 新功能均为独立开关，默认配置保持既有行为。
+* Added sitemap and custom URL preloading with WP-Cron batches.
+* Added selective purge, conditional requests, and Brotli/Gzip precompression.
+* Added native image and iframe lazy loading, script deferral, rule-based delayed scripts, and CDN URL rewriting.
+* Fixed malformed script URLs, CDN path mapping, and WordPress 304 status handling.
 
 = 1.1.1 =
-* 保留 JS 自动分号插入所需换行，避免压缩改变脚本语义。
-* 修正 CSS 后代伪类选择器与 HTML 行内元素空白被误改的问题。
-* CSS 仅在原位置合并相邻且 media 相同的样式表，并保留标签属性。
-* 非 HTML 响应不优化；登录用户缓存按用户隔离并使用 private 响应头。
-* 修正深层缓存文件计数、Windows 路径兼容与权限拒绝响应码。
-* 清理后恢复目录防护文件，全部功能关闭时不再启用输出缓冲。
+* Preserved JavaScript ASI newlines during minification.
+* Fixed CSS descendant pseudo-class and HTML inline whitespace handling.
+* Preserved CSS cascade order and stylesheet tag attributes.
+* Isolated logged-in cache keys and improved cache directory safeguards.
 
-= 1.1.0 =
-* 在插件列表页增加「设置」快捷入口。
-* 设置注册提前到 init，程序化更新也能触发过滤与缓存刷新。
-* 修正登录 Cookie 排除规则缺少通配符的问题。
-* CSS 改写无收益时保留原标签，避免体积变大。
-* 完善 README 文档与仓库检索信息。
+== Upgrade Notice ==
 
-= 1.0.0 =
-* 初始版本：页面缓存、HTML/CSS/JS 优化、排除规则、版本控制与管理页面。
+= 1.2.1 =
+Submission readiness update. No new features or configuration changes are required.

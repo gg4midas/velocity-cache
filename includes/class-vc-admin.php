@@ -292,7 +292,7 @@ final class VC_Admin {
 			esc_attr( VC_Settings::OPTION ),
 			esc_attr( $key ),
 			(int) $settings[ $key ],
-			$max
+			(int) $max
 		);
 
 		if ( ! empty( $args['desc'] ) ) {
@@ -384,6 +384,7 @@ final class VC_Admin {
 		if ( is_wp_error( $result ) ) {
 			$this->set_notice( $result, '' );
 		} else {
+			/* translators: %d: number of URLs added to the preload queue. */
 			$this->set_notice( true, sprintf( __( '已加入 %d 个预加载 URL，将由 WP-Cron 分批处理。', 'velocity-cache' ), $result ) );
 			if ( function_exists( 'spawn_cron' ) ) {
 				spawn_cron();
@@ -425,13 +426,21 @@ final class VC_Admin {
 	 * 后台通知。
 	 */
 	public function notices() {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Settings API verified the nonce before this redirect.
 		if ( isset( $_GET['settings-updated'] ) && isset( $_GET['page'] ) && VC_Settings::PAGE === sanitize_key( wp_unslash( $_GET['page'] ) ) ) {
 			$version = (int) VC_Settings::get()['asset_version'];
 			printf(
 				'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
-				esc_html( sprintf( __( '设置已保存，页面缓存已刷新。当前资源版本：v%d', 'velocity-cache' ), $version ) )
+				esc_html(
+					sprintf(
+						/* translators: %d: asset version number. */
+						__( '设置已保存，页面缓存已刷新。当前资源版本：v%d', 'velocity-cache' ),
+						$version
+					)
+				)
 			);
 		}
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		$notice = get_transient( 'vc_admin_notice' );
 		if ( ! is_array( $notice ) || empty( $notice['message'] ) ) {
@@ -474,6 +483,7 @@ final class VC_Admin {
 		$preload_text = __( '暂无', 'velocity-cache' );
 		if ( is_array( $preload ) && ! empty( $preload['time'] ) ) {
 			$preload_text = sprintf(
+				/* translators: 1: date and time, 2: successful URL count, 3: failed URL count. */
 				__( '%1$s（成功 %2$d，失败 %3$d）', 'velocity-cache' ),
 				wp_date( 'Y-m-d H:i:s', (int) $preload['time'] ),
 				(int) $preload['success'],
@@ -483,7 +493,7 @@ final class VC_Admin {
 
 		return array(
 			__( '缓存目录', 'velocity-cache' ) => $root,
-			__( '目录可写', 'velocity-cache' ) => is_writable( $root ) ? __( '是', 'velocity-cache' ) : __( '否', 'velocity-cache' ),
+			__( '目录可写', 'velocity-cache' ) => wp_is_writable( $root ) ? __( '是', 'velocity-cache' ) : __( '否', 'velocity-cache' ),
 			__( '页面缓存文件', 'velocity-cache' ) => (string) VC_Tools::count_files( 'pages' ),
 			__( '优化资源文件', 'velocity-cache' ) => (string) VC_Tools::count_files( 'assets' ),
 			__( '资源版本号', 'velocity-cache' ) => 'v' . (int) VC_Settings::get()['asset_version'],

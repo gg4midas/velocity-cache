@@ -137,12 +137,13 @@ final class VC_Tools {
 		$tmp    = $file . '.tmp.' . $suffix;
 
 		if ( false === @file_put_contents( $tmp, $data, LOCK_EX ) ) {
-			@unlink( $tmp );
+			wp_delete_file( $tmp );
 			return new WP_Error( 'vc_write_failed', '缓存文件写入失败：' . $file );
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Atomic rename is required for the cache write.
 		if ( ! @rename( $tmp, $file ) ) {
-			@unlink( $tmp );
+			wp_delete_file( $tmp );
 			return new WP_Error( 'vc_rename_failed', '缓存文件替换失败：' . $file );
 		}
 
@@ -181,7 +182,7 @@ final class VC_Tools {
 			if ( is_dir( $path ) && ! is_link( $path ) ) {
 				self::remove_nested( $path, $dir );
 			} else {
-				@unlink( $path );
+				wp_delete_file( $path );
 			}
 		}
 
@@ -213,11 +214,12 @@ final class VC_Tools {
 				if ( is_dir( $path ) && ! is_link( $path ) ) {
 					self::remove_nested( $path, $root );
 				} else {
-					@unlink( $path );
+					wp_delete_file( $path );
 				}
 			}
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Removing an empty directory inside the plugin-owned cache root.
 		@rmdir( $dir );
 	}
 
@@ -239,6 +241,7 @@ final class VC_Tools {
 		}
 
 		if ( is_file( $file ) && filesize( $file ) > 1048576 ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Log rotation inside the plugin-owned cache root.
 			@rename( $file, $file . '.old' );
 		}
 
@@ -261,11 +264,12 @@ final class VC_Tools {
 			return false;
 		}
 
-		if ( ! isset( $_SERVER['REQUEST_METHOD'] ) || 'GET' !== strtoupper( $_SERVER['REQUEST_METHOD'] ) ) {
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : '';
+		if ( 'GET' !== $method ) {
 			return false;
 		}
 
-		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) parse_url( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '';
+		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_parse_url( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '';
 		$path = strtolower( $path );
 
 		if ( '' === $path || preg_match( '#/(?:wp-admin|wp-login\.php|xmlrpc\.php)(?:/|$)#', $path ) ) {
@@ -303,9 +307,9 @@ final class VC_Tools {
 	public static function request_key( $with_query ) {
 		$scheme = is_ssl() ? 'https' : 'http';
 		$host   = isset( $_SERVER['HTTP_HOST'] ) ? strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ) : (string) wp_parse_url( home_url(), PHP_URL_HOST );
-		$uri    = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '/';
-		$path   = (string) parse_url( $uri, PHP_URL_PATH );
-		$query  = $with_query ? (string) parse_url( $uri, PHP_URL_QUERY ) : '';
+		$uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+		$path   = (string) wp_parse_url( $uri, PHP_URL_PATH );
+		$query  = $with_query ? (string) wp_parse_url( $uri, PHP_URL_QUERY ) : '';
 		$user   = is_user_logged_in() ? get_current_user_id() : 0;
 
 		return md5( $scheme . '|' . $host . '|' . $path . '|' . $query . '|user:' . $user );

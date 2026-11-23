@@ -96,8 +96,8 @@ final class VC_Cache {
 			return false;
 		}
 
-		$uri  = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '/';
-		$path = (string) parse_url( $uri, PHP_URL_PATH );
+		$uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+		$path = (string) wp_parse_url( $uri, PHP_URL_PATH );
 
 		if ( VC_Tools::match_rules( $path, $settings['exclude_urls'] ) || VC_Tools::match_rules( $uri, $settings['exclude_urls'] ) ) {
 			return false;
@@ -111,6 +111,7 @@ final class VC_Cache {
 			return false;
 		}
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only check; query parameters are never processed as form data.
 		if ( empty( $settings['cache_query'] ) && ! empty( $_GET ) ) {
 			return false;
 		}
@@ -161,7 +162,7 @@ final class VC_Cache {
 
 		$serve_file = $file;
 		$encoding   = '';
-		$accept     = isset( $_SERVER['HTTP_ACCEPT_ENCODING'] ) ? strtolower( (string) $_SERVER['HTTP_ACCEPT_ENCODING'] ) : '';
+		$accept     = isset( $_SERVER['HTTP_ACCEPT_ENCODING'] ) ? strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT_ENCODING'] ) ) ) : '';
 
 		if ( ! empty( $settings['enable_compression'] ) ) {
 			if ( false !== strpos( $accept, 'br' ) && is_file( $file . '.br' ) ) {
@@ -198,11 +199,11 @@ final class VC_Cache {
 		}
 
 		if ( ! empty( $settings['enable_304'] ) ) {
-			$if_none_match = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? str_replace( '\\', '', trim( (string) $_SERVER['HTTP_IF_NONE_MATCH'] ) ) : '';
+			$if_none_match = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? str_replace( '\\', '', trim( sanitize_text_field( wp_unslash( $_SERVER['HTTP_IF_NONE_MATCH'] ) ) ) ) : '';
 			$not_modified  = $if_none_match && ( '*' === $if_none_match || false !== strpos( $if_none_match, $etag ) );
 
 			if ( ! $if_none_match && isset( $_SERVER['HTTP_IF_MODIFIED_SINCE'] ) ) {
-				$since        = strtotime( (string) $_SERVER['HTTP_IF_MODIFIED_SINCE'] );
+				$since        = strtotime( sanitize_text_field( wp_unslash( $_SERVER['HTTP_IF_MODIFIED_SINCE'] ) ) );
 				$not_modified = false !== $since && $since >= $mtime;
 			}
 
@@ -217,6 +218,7 @@ final class VC_Cache {
 			header( 'Content-Length: ' . filesize( $serve_file ) );
 		}
 		$this->served = true;
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile -- Streaming cached HTML avoids loading the whole page into memory.
 		readfile( $serve_file );
 
 		if ( function_exists( 'fastcgi_finish_request' ) ) {
@@ -320,7 +322,7 @@ final class VC_Cache {
 	private static function delete_variants( $file ) {
 		foreach ( array( '', '.gz', '.br' ) as $suffix ) {
 			if ( is_file( $file . $suffix ) ) {
-				@unlink( $file . $suffix );
+				wp_delete_file( $file . $suffix );
 			}
 		}
 	}
