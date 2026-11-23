@@ -10,8 +10,18 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 delete_option( 'vc_settings' );
+delete_option( 'vc_preload_queue' );
 delete_transient( 'vc_admin_notice' );
 delete_transient( 'vc_last_purge' );
+delete_transient( 'vc_preload_lock' );
+delete_transient( 'vc_last_preload' );
+
+foreach ( array( 'vc_preload_batch', 'vc_preload_build' ) as $hook ) {
+	$timestamp = wp_next_scheduled( $hook );
+	if ( $timestamp ) {
+		wp_unschedule_event( $timestamp, $hook );
+	}
+}
 
 $upload_dir = wp_upload_dir();
 $cache_root = WP_CONTENT_DIR . '/cache/velocity-cache';

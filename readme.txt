@@ -4,7 +4,7 @@ Tags: cache, performance, minify, optimization, pagespeed, page-cache, css, java
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,10 +16,11 @@ Velocity Cache 是一套独立的 WordPress 性能优化实现，不依赖、不
 
 功能：
 
-* 页面缓存：仅对匿名访客的 GET 请求生成静态 HTML，支持 TTL 与手动清理。
+* 页面缓存：仅对匿名访客的 GET 请求生成静态 HTML，支持 TTL、关联清除、预加载、304 与 Brotli/Gzip 预压缩。
 * HTML 压缩：移除注释与冗余空白，保留 `<pre>`、`<textarea>`、`<script>`、`<style>` 内容。
 * CSS 优化：可单独开启压缩、合并；只合并相邻且 media 相同的样式表，保持级联顺序，并自动把相对 URL 绝对化。
-* JavaScript 优化：本地脚本与内联脚本压缩，跳过 `async` / `defer` / `module` 及外部域名脚本。
+* JavaScript 优化：本地脚本与内联脚本压缩，支持可选 Defer 和按规则 Delay JS。
+* 加载优化：原生图片/iframe LazyLoad、首屏图片跳过、CDN 静态地址重写。
 * 文件版本控制：设置变更或手动操作会递增资源版本号，并写入资源 URL 与缓存文件名。
 * 排除规则：按 URL（支持 `*` 通配符）、Cookie 名、CSS/JS 关键词排除。
 * 安全与健壮性：能力检查、nonce、输入过滤、路径白名单、异常捕获与错误日志。
@@ -52,6 +53,14 @@ Velocity Cache 是一套独立的 WordPress 性能优化实现，不依赖、不
 在设置页点击「清理缓存」；内容更新、主题切换、菜单更新时页面缓存也会自动失效。
 
 == Changelog ==
+
+= 1.2.0 =
+* 新增站点地图/自定义 URL 预加载队列，WP-Cron 分批执行并显示结果。
+* 新增文章关联清除、ETag/Last-Modified 304、Brotli/Gzip 预压缩。
+* 新增原生图片与 iframe LazyLoad、首屏图片跳过数。
+* 新增 JavaScript Defer、按规则 Delay JS 和本地静态资源 CDN 重写。
+* 修正 JS 压缩后 script 标签重复 src、CDN 目录映射及 WordPress 304 状态头。
+* 新功能均为独立开关，默认配置保持既有行为。
 
 = 1.1.1 =
 * 保留 JS 自动分号插入所需换行，避免压缩改变脚本语义。

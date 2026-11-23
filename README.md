@@ -12,10 +12,16 @@
 | 模块 | 说明 |
 | --- | --- |
 | 页面缓存 | 仅为匿名访客的 GET 请求生成静态 HTML；支持 TTL、过期重建、内容更新自动失效与手动清理 |
+| 缓存预加载 | 自定义站内 URL 或站点地图发现，WP-Cron 每批 5 个、最多 200 个，记录成功/失败 |
+| 关联清除 | 可选只清文章页、首页及关联归档，避免每次编辑都全站清空 |
+| 304 / 预压缩 | 可选 ETag、Last-Modified、Brotli/Gzip 变体，按客户端编码能力投递 |
 | HTML 压缩 | 移除注释与冗余空白，保留 `pre`、`textarea`、`script`、`style` 内容 |
 | CSS 压缩 | 压缩本地样式表与内联 `style`，生成带版本号的缓存文件 |
 | CSS 合并 | 只合并相邻且 `media` 相同的样式表，保持级联顺序；`url()` 相对路径自动绝对化；含 `@import` 的样式表跳过 |
 | JavaScript 压缩 | 压缩本地脚本与内联脚本；跳过站外资源及 `module`、`async`、`defer` 脚本 |
+| LazyLoad | 原生图片/iframe `loading=lazy`，首屏图片默认跳过 2 张，支持 no-lazy/skip-lazy 标记 |
+| JS 加载策略 | 可选外链脚本 Defer；按明确规则 Delay JS，首次交互或 5 秒后恢复 |
+| CDN 重写 | 可选把本地 CSS/JS/图片/字体的 src/href 重写到 CDN，不改动态端点 |
 | 排除规则 | 按 URL、Cookie 名、CSS/JS handle 或 URL 关键词排除，支持 `*` 与 `?` 通配符 |
 | 版本控制 | 配置变更自动递增版本号，资源 URL 追加 `?ver=vcN`；可手动递增强制客户端刷新 |
 | 错误处理 | 异常捕获后回退原始 HTML；写盘失败记录到缓存目录日志 |
@@ -37,8 +43,10 @@
 
 ## 后台设置
 
-- **缓存**：页面缓存开关、TTL（默认 3600 秒）、是否缓存已登录用户、是否缓存带查询参数的 URL。
+- **缓存**：页面缓存开关、TTL（默认 3600 秒）、是否缓存已登录用户、是否缓存带查询参数的 URL、关联清除、304 和预压缩。
+- **缓存预加载**：自动预加载开关、自定义 URL；工具区可手动建立队列，状态区显示队列与执行结果。
 - **资源优化**：HTML 压缩、CSS 压缩、CSS 合并、JavaScript 压缩，四项独立开关。
+- **加载优化**：图片/iframe LazyLoad、首屏跳过数、JS Defer、按规则 Delay JS、CDN 地址重写。
 - **排除规则**：排除 URL、排除 Cookie 名、排除 CSS、排除 JavaScript。
 - **错误处理**：错误日志开关，日志写入 `wp-content/cache/velocity-cache/logs/errors.log`。
 - **缓存工具**：清理页面缓存、清理全部缓存、递增资源版本号。
@@ -89,6 +97,8 @@ wp-content/cache/velocity-cache/
 - 上游已压缩的 CSS/JS 二次压缩收益有限，插件会跳过无收益的改写
 - 含 `@import` 的样式表不参与合并；跨越内联样式、脚本或其他标签的样式表也不强行合并，避免改变级联顺序
 - 页面里的表单 nonce 会随缓存一起被冻结；TTL 默认 1 小时，提交失败时清理缓存即可
+- Delay JS 仅适合明确可延迟的第三方脚本；Defer 开启后需检查依赖 jQuery 的内联脚本
+- 当前不包含云端 Critical CSS、真实用户 CWV 分析或 WebP/AVIF 批量转换
 
 ## 项目结构
 
@@ -101,12 +111,21 @@ includes/
   class-vc-settings.php         设置与版本控制
   class-vc-admin.php            后台配置页面
   class-vc-cache.php            页面缓存
+  class-vc-preloader.php        预加载队列与后台批处理
   class-vc-optimizer.php        前端资源优化
   class-vc-tools.php            路径、文件、日志与压缩工具
 admin/                          设置页视图与静态资源
 ```
 
 ## 更新记录
+
+### 1.2.0
+
+- 新增站点地图/自定义 URL 预加载队列与后台批处理。
+- 新增关联清除、304、Brotli/Gzip 预压缩。
+- 新增图片/iframe LazyLoad、JS Defer、按规则 Delay JS、CDN 静态地址重写。
+- 修正 JS 压缩后 script 标签重复 `src`、CDN 目录映射及 WordPress 304 状态头。
+- 新功能均为独立开关，默认关闭，保持既有配置行为。
 
 ### 1.1.1
 
