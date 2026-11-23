@@ -29,6 +29,7 @@ final class VC_Tools {
 	public static function deactivate() {
 		self::purge_dir( 'pages' );
 		self::purge_dir( 'assets' );
+		self::ensure_dirs();
 		self::log( 'plugin deactivated, caches purged' );
 	}
 
@@ -108,6 +109,7 @@ final class VC_Tools {
 	public static function ensure_dirs() {
 		$dirs = array(
 			self::sub_path( 'pages' ),
+			self::sub_path( 'assets' ),
 			self::sub_path( 'assets', 'css' ),
 			self::sub_path( 'assets', 'js' ),
 			self::sub_path( 'logs' ),
@@ -278,6 +280,21 @@ final class VC_Tools {
 	}
 
 	/**
+	 * 当前响应是否声明为 HTML。XML、JSON、纯文本等响应不做前端优化。
+	 *
+	 * @return bool
+	 */
+	public static function is_html_response() {
+		foreach ( headers_list() as $header ) {
+			if ( 0 === stripos( $header, 'Content-Type:' ) ) {
+				return false !== stripos( $header, 'text/html' ) || false !== stripos( $header, 'application/xhtml+xml' );
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * 生成当前请求的缓存键。
 	 *
 	 * @param bool $with_query 是否把查询串计入缓存键。
@@ -289,8 +306,9 @@ final class VC_Tools {
 		$uri    = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '/';
 		$path   = (string) parse_url( $uri, PHP_URL_PATH );
 		$query  = $with_query ? (string) parse_url( $uri, PHP_URL_QUERY ) : '';
+		$user   = is_user_logged_in() ? get_current_user_id() : 0;
 
-		return md5( $scheme . '|' . $host . '|' . $path . '|' . $query );
+		return md5( $scheme . '|' . $host . '|' . $path . '|' . $query . '|user:' . $user );
 	}
 
 	/**
@@ -394,14 +412,17 @@ final class VC_Tools {
 
 		$candidates[] = ABSPATH . ltrim( $path, '/' );
 
-		$allowed = array_filter( array( realpath( WP_CONTENT_DIR ), realpath( ABSPATH ) ) );
+		$allowed = array_filter( array( realpath( WP_CONTENT_DIR ), realpath( WP_PLUGIN_DIR ), realpath( ABSPATH ) ) );
 		foreach ( $candidates as $candidate ) {
 			$real = realpath( $candidate );
 			if ( ! $real || ! is_file( $real ) || ! is_readable( $real ) ) {
 				continue;
 			}
+
+			$normalized_real = wp_normalize_path( $real );
 			foreach ( $allowed as $base ) {
-				if ( 0 === strpos( $real, rtrim( $base, '/' ) . '/' ) ) {
+				$base = rtrim( wp_normalize_path( $base ), '/' );
+				if ( 0 === strpos( $normalized_real, $base . '/' ) ) {
 					return $real;
 				}
 			}
@@ -445,8 +466,10 @@ final class VC_Tools {
 			return $rel;
 		}
 
+		$authority = ( isset( $parts['host'] ) ? $parts['host'] : '' ) . ( isset( $parts['port'] ) ? ':' . $parts['port'] : '' );
+
 		if ( 0 === strpos( $rel, '/' ) ) {
-			return ( isset( $parts['scheme'] ) ? $parts['scheme'] : 'https' ) . '://' . ( isset( $parts['host'] ) ? $parts['host'] : '' ) . $rel;
+			return ( isset( $parts['scheme'] ) ? $parts['scheme'] : 'https' ) . '://' . $authority . $rel;
 		}
 
 		$dir = isset( $parts['path'] ) ? preg_replace( '#/[^/]*$#', '', $parts['path'] ) : '';
@@ -465,9 +488,8 @@ final class VC_Tools {
 		}
 
 		$scheme = isset( $parts['scheme'] ) ? $parts['scheme'] : 'https';
-		$host   = isset( $parts['host'] ) ? $parts['host'] : '';
 
-		return $scheme . '://' . $host . '/' . implode( '/', $out );
+		return $scheme . '://' . $authority . '/' . implode( '/', $out );
 	}
 
 	/**
@@ -617,7 +639,8 @@ final class VC_Tools {
 				continue;
 			}
 			$code = preg_replace( '/\s+/', ' ', $token[1] );
-			$code = preg_replace( '/\s*([{}:;,>])\s*/', '$1', $code );
+			// 不压缩冒号两侧空白，避免把 .parent :hover 改成 .parent:hover。
+			$code = preg_replace( '/\s*([{};,>])\s*/', '$1', $code );
 			$code = preg_replace( '/;\s*}/', '}', $code );
 			$out .= $code;
 		}
@@ -642,9 +665,11 @@ final class VC_Tools {
 				$out .= $token[1];
 				continue;
 			}
-			$code = preg_replace( '/\s+/', ' ', $token[1] );
-			$code = preg_replace( '/\s*([{}();,:=])\s*/', '$1', $code );
-			$code = preg_replace( '/;(\s*)}/', '}', $code );
+			// 只压缩水平空白，保留换行以维持 JavaScript 自动分号插入（ASI）语义。
+			$code = preg_replace( '/[^\S\r\n]+/', ' ', $token[1] );
+			$code = preg_replace( '/\r\n?/', "\n", $code );
+			$code = preg_replace( '/[ \t]*([{}();,:=])[ \t]*/', '$1', $code );
+			$code = preg_replace( '/;[ \t]*}/', '}', $code );
 			$out .= $code;
 		}
 
@@ -679,7 +704,8 @@ final class VC_Tools {
 			}
 
 			$part = preg_replace( '/<!--(?!\[if\b).*?-->/s', '', $part );
-			$part = preg_replace( '/>\s+</', '><', $part );
+			// 标签间空白可能影响行内元素的可见间距，最多压缩为一个空格。
+			$part = preg_replace( '/>\s+</', '> <', $part );
 			$part = preg_replace( '/[ \t]+/', ' ', $part );
 			$part = preg_replace( '/\s*\n\s*/', "\n", $part );
 			$part = preg_replace( '/\n{2,}/', "\n", $part );
@@ -703,31 +729,24 @@ final class VC_Tools {
 		}
 
 		$count = 0;
-		$items = @scandir( $dir );
-		if ( ! is_array( $items ) ) {
-			return 0;
-		}
 
-		foreach ( $items as $item ) {
-			if ( '.' === $item || '..' === $item || 'index.php' === $item || '.htaccess' === $item ) {
-				continue;
-			}
-			$path = $dir . '/' . $item;
-			if ( is_file( $path ) ) {
-				$count++;
-			} elseif ( is_dir( $path ) ) {
-				$nested = @scandir( $path );
-				if ( is_array( $nested ) ) {
-					foreach ( $nested as $child ) {
-						if ( '.' === $child || '..' === $child ) {
-							continue;
-						}
-						if ( is_file( $path . '/' . $child ) ) {
-							$count++;
-						}
-					}
+		try {
+			$iterator = new RecursiveIteratorIterator(
+				new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS )
+			);
+
+			foreach ( $iterator as $file ) {
+				if ( ! $file->isFile() ) {
+					continue;
+				}
+
+				$name = $file->getFilename();
+				if ( 'index.php' !== $name && '.htaccess' !== $name ) {
+					$count++;
 				}
 			}
+		} catch ( \Exception $e ) {
+			return 0;
 		}
 
 		return $count;

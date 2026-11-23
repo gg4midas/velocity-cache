@@ -17,7 +17,7 @@ final class VC_Optimizer {
 	 * @return string
 	 */
 	public static function process( $html, $settings ) {
-		if ( ! is_string( $html ) || '' === $html ) {
+		if ( ! is_string( $html ) || '' === $html || ( defined( 'DONOTMINIFY' ) && DONOTMINIFY ) ) {
 			return $html;
 		}
 
@@ -54,9 +54,8 @@ final class VC_Optimizer {
 		$exclude = isset( $settings['exclude_css_handles'] ) ? $settings['exclude_css_handles'] : '';
 		$version = (int) ( isset( $settings['asset_version'] ) ? $settings['asset_version'] : 1 );
 
-		$replacements        = array();
-		$groups              = array();
-		$combined_candidates = array();
+		$replacements = array();
+		$candidates   = array();
 
 		foreach ( $matches[0] as $index => $found ) {
 			$tag    = $found[0];
@@ -66,12 +65,12 @@ final class VC_Optimizer {
 				continue;
 			}
 
-			if ( ! preg_match( '/\bhref\s*=\s*(["\'])(.*?)\1/i', $tag, $href_match ) ) {
+			if ( ! preg_match( '/\bhref\s*=\s*(["\'])(.*?)\1/i', $tag, $href_match, PREG_OFFSET_CAPTURE ) ) {
 				continue;
 			}
 
-			$href = html_entity_decode( $href_match[2], ENT_QUOTES, get_option( 'blog_charset' ) );
-			if ( '' === $href ||preg_match( '/^(?:data:|javascript:)/i', $href ) ) {
+			$href = html_entity_decode( $href_match[2][0], ENT_QUOTES, get_option( 'blog_charset' ) );
+			if ( '' === $href || preg_match( '/^(?:data:|javascript:)/i', $href ) ) {
 				continue;
 			}
 
@@ -121,9 +120,17 @@ final class VC_Optimizer {
 			$fingerprint = md5( $href . '|' . (string) filesize( $local ) . '|' . (string) filemtime( $local ) . '|' . md5( $css ) );
 
 			if ( $combine ) {
-				$groups[ $media ]['parts'][]        = $css;
-				$groups[ $media ]['fingerprints'][] = $fingerprint;
-				$combined_candidates[]              = array( 'offset' => $offset, 'length' => strlen( $tag ), 'media' => $media );
+				$candidates[] = array(
+					'tag'           => $tag,
+					'offset'        => $offset,
+					'length'        => strlen( $tag ),
+					'media'         => $media,
+					'css'           => $css,
+					'original_size' => $original_size,
+					'fingerprint'   => $fingerprint,
+					'href_offset'   => $href_match[2][1],
+					'href_length'   => strlen( $href_match[2][0] ),
+				);
 				continue;
 			}
 
@@ -143,18 +150,46 @@ final class VC_Optimizer {
 			}
 
 			$url    = VC_Tools::cache_base_url() . 'assets/css/' . $hash . '?ver=vc' . $version;
-			$newtag = '<link rel="stylesheet" href="' . esc_url( $url ) . '" media="' . esc_attr( $media ) . '">';
+			$newtag = substr_replace( $tag, esc_url( $url ), $href_match[2][1], strlen( $href_match[2][0] ) );
 			$replacements[] = array( 'offset' => $offset, 'length' => strlen( $tag ), 'value' => $newtag );
 		}
 
-		$written_media = array();
-		$links         = '';
+		if ( $combine && ! empty( $candidates ) ) {
+			$runs     = array();
+			$run      = array();
+			$previous = null;
 
-		if ( $combine && ! empty( $groups ) ) {
-			foreach ( $groups as $media => $group ) {
-				$hash  = substr( md5( implode( '|', $group['fingerprints'] ) . '|' . $version ), 0, 12 ) . '.css';
-				$out   = VC_Tools::sub_path( 'assets', 'css/' . $hash );
-				$body  = implode( "\n", $group['parts'] );
+			// 只合并相邻且 media 相同的样式表，避免改变 CSS 级联顺序。
+			foreach ( $candidates as $candidate ) {
+				$adjacent = false;
+				if ( null !== $previous && $previous['media'] === $candidate['media'] ) {
+					$gap_start = $previous['offset'] + $previous['length'];
+					$gap       = substr( $html, $gap_start, $candidate['offset'] - $gap_start );
+					$adjacent  = '' === trim( $gap );
+				}
+
+				if ( ! $adjacent && ! empty( $run ) ) {
+					$runs[] = $run;
+					$run    = array();
+				}
+
+				$run[]    = $candidate;
+				$previous = $candidate;
+			}
+			if ( ! empty( $run ) ) {
+				$runs[] = $run;
+			}
+
+			foreach ( $runs as $group ) {
+				if ( 1 === count( $group ) && ( ! $minify || strlen( $group[0]['css'] ) >= $group[0]['original_size'] * 0.98 ) ) {
+					continue;
+				}
+
+				$parts        = wp_list_pluck( $group, 'css' );
+				$fingerprints = wp_list_pluck( $group, 'fingerprint' );
+				$hash         = substr( md5( implode( '|', $fingerprints ) . '|' . $version ), 0, 12 ) . '.css';
+				$out          = VC_Tools::sub_path( 'assets', 'css/' . $hash );
+				$body         = implode( "\n", $parts );
 
 				if ( ! is_file( $out ) ) {
 					$written = VC_Tools::write_file( $out, $body );
@@ -164,17 +199,15 @@ final class VC_Optimizer {
 					}
 				}
 
-				$url   = VC_Tools::cache_base_url() . 'assets/css/' . $hash . '?ver=vc' . $version;
-				$links .= '<link rel="stylesheet" id="vc-combined-' . esc_attr( md5( $media ) ) . '-css" href="' . esc_url( $url ) . '" media="' . esc_attr( $media ) . '">';
-				$written_media[ $media ] = true;
-			}
+				$first  = $group[0];
+				$url    = VC_Tools::cache_base_url() . 'assets/css/' . $hash . '?ver=vc' . $version;
+				$newtag = substr_replace( $first['tag'], esc_url( $url ), $first['href_offset'], $first['href_length'] );
 
-			foreach ( $combined_candidates as $candidate ) {
-				if ( ! empty( $written_media[ $candidate['media'] ] ) ) {
-					$replacements[] = array( 'offset' => $candidate['offset'], 'length' => $candidate['length'], 'value' => '' );
+				$replacements[] = array( 'offset' => $first['offset'], 'length' => $first['length'], 'value' => $newtag );
+				for ( $i = 1, $total = count( $group ); $i < $total; $i++ ) {
+					$replacements[] = array( 'offset' => $group[ $i ]['offset'], 'length' => $group[ $i ]['length'], 'value' => '' );
 				}
 			}
-
 		}
 
 		// 从后往前替换，避免偏移失效。
@@ -187,15 +220,6 @@ final class VC_Optimizer {
 
 		foreach ( $replacements as $replacement ) {
 			$html = substr_replace( $html, $replacement['value'], $replacement['offset'], $replacement['length'] );
-		}
-
-		if ( '' !== $links ) {
-			$pos = stripos( $html, '</head>' );
-			if ( false !== $pos ) {
-				$html = substr_replace( $html, $links, $pos, 0 );
-			} else {
-				$html = $links . $html;
-			}
 		}
 
 		return self::optimize_inline_styles( $html, $settings );

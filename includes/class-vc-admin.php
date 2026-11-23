@@ -61,7 +61,7 @@ final class VC_Admin {
 	 */
 	public function render_page() {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( '你没有权限访问此页面。', 'velocity-cache' ), 403 );
+			wp_die( esc_html__( '你没有权限访问此页面。', 'velocity-cache' ), '', array( 'response' => 403 ) );
 		}
 
 		VC_Tools::ensure_dirs();
@@ -109,7 +109,7 @@ final class VC_Admin {
 			array( $this, 'checkbox_field' ),
 			VC_Settings::PAGE,
 			'vc_section_cache',
-			array( 'key' => 'cache_logged_in', 'desc' => __( '不推荐开启：不同用户可能看到相同页面。', 'velocity-cache' ) )
+			array( 'key' => 'cache_logged_in', 'desc' => __( '按用户 ID 隔离缓存；还需移除登录 Cookie 排除规则。个性化页面请谨慎开启。', 'velocity-cache' ) )
 		);
 
 		add_settings_field(
@@ -278,7 +278,7 @@ final class VC_Admin {
 	 */
 	public function handle_purge() {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( '你没有权限执行此操作。', 'velocity-cache' ), 403 );
+			wp_die( esc_html__( '你没有权限执行此操作。', 'velocity-cache' ), '', array( 'response' => 403 ) );
 		}
 
 		check_admin_referer( 'vc_purge_cache' );
@@ -295,7 +295,7 @@ final class VC_Admin {
 	 */
 	public function handle_bump() {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( '你没有权限执行此操作。', 'velocity-cache' ), 403 );
+			wp_die( esc_html__( '你没有权限执行此操作。', 'velocity-cache' ), '', array( 'response' => 403 ) );
 		}
 
 		check_admin_referer( 'vc_bump_version' );
@@ -390,7 +390,7 @@ final class VC_Admin {
 			__( '页面缓存文件', 'velocity-cache' ) => (string) VC_Tools::count_files( 'pages' ),
 			__( '优化资源文件', 'velocity-cache' ) => (string) VC_Tools::count_files( 'assets' ),
 			__( '资源版本号', 'velocity-cache' ) => 'v' . (int) VC_Settings::get()['asset_version'],
-			__( '上次清理时间', 'velocity-cache' ) => $last ? gmdate( 'Y-m-d H:i:s', $last + (int) ( get_option( 'gmt_offset' ) * HOUR_IN_SECONDS ) ) : __( '暂无', 'velocity-cache' ),
+			__( '上次清理时间', 'velocity-cache' ) => $last ? wp_date( 'Y-m-d H:i:s', $last ) : __( '暂无', 'velocity-cache' ),
 		);
 	}
 }
