@@ -109,7 +109,7 @@ final class VC_Preloader {
 				array(
 					'timeout'     => 20,
 					'redirection' => 3,
-					'sslverify'   => false,
+					'sslverify'   => true,
 					'headers'     => array( 'User-Agent' => 'Velocity-Cache-Preloader/' . VC_VERSION ),
 				)
 			);
@@ -195,7 +195,7 @@ final class VC_Preloader {
 			return array();
 		}
 
-		$response = wp_remote_get( $url, array( 'timeout' => 12, 'redirection' => 2, 'sslverify' => false ) );
+		$response = wp_remote_get( $url, array( 'timeout' => 12, 'redirection' => 2, 'sslverify' => true ) );
 		if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 			return array();
 		}
