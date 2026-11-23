@@ -202,6 +202,8 @@ final class VC_Admin {
 				'lazyload_iframes' => array( __( 'iframe LazyLoad', 'velocity-cache' ), __( '延迟加载视频、地图等 iframe。', 'velocity-cache' ) ),
 				'enable_js_defer'  => array( __( 'JavaScript Defer', 'velocity-cache' ), __( '为外链脚本添加 defer；jQuery、已有 async/defer/module 和排除规则中的脚本跳过。', 'velocity-cache' ) ),
 				'enable_js_delay'  => array( __( '按规则 Delay JS', 'velocity-cache' ), __( '仅延迟下方规则匹配的脚本，首次交互或 5 秒后恢复执行。', 'velocity-cache' ) ),
+				'enable_delay_third_party' => array( __( '延迟常见第三方脚本', 'velocity-cache' ), __( '延迟 reCAPTCHA、GTag/GTM、Google Ads、Facebook Pixel 与 Cloudflare Beacon；首次交互或 5 秒后加载。', 'velocity-cache' ) ),
+				'enable_async_css' => array( __( '异步加载非关键 CSS', 'velocity-cache' ), __( '把非排除的样式表改为非阻塞加载，并提供 noscript 回退；核心主题样式默认排除。', 'velocity-cache' ) ),
 				'enable_cdn'       => array( __( 'CDN 地址重写', 'velocity-cache' ), __( '仅重写本地静态资源的 src/href，不改页面链接、srcset 或动态端点。', 'velocity-cache' ) ),
 			) as $key => $labels
 		) {
@@ -209,6 +211,8 @@ final class VC_Admin {
 		}
 		add_settings_field( 'lazyload_skip', __( '首屏图片跳过数', 'velocity-cache' ), array( $this, 'number_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'lazyload_skip', 'desc' => __( '前 N 张图片不延迟，默认 2，最大 20。', 'velocity-cache' ) ) );
 		add_settings_field( 'delay_js_handles', __( 'Delay JS 规则', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'delay_js_handles', 'desc' => __( '每行一条 handle 或 URL 规则，支持 * 与 ?；留空时不会延迟任何脚本。', 'velocity-cache' ) ) );
+		add_settings_field( 'async_css_excludes', __( 'CSS 异步排除', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'async_css_excludes', 'desc' => __( '默认排除 astra-theme-css；每行一个 handle 或 URL 规则，核心布局样式必须保留阻塞加载。', 'velocity-cache' ) ) );
+		add_settings_field( 'critical_css', __( '关键 CSS', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'critical_css', 'desc' => __( '可选。填写首屏关键 CSS，会注入 head；不要包含 style 标签。', 'velocity-cache' ) ) );
 		add_settings_field( 'cdn_url', __( 'CDN URL', 'velocity-cache' ), array( $this, 'text_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'cdn_url', 'desc' => __( '例如 https://cdn.example.com，对应原站根路径并保留 wp-content/wp-includes 目录。', 'velocity-cache' ) ) );
 
 		add_settings_section(

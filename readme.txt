@@ -4,7 +4,7 @@ Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,7 +20,8 @@ Velocity Cache is an independent WordPress performance plugin. It generates stat
 * Cache preloading: build a queue from custom URLs or common sitemaps and process it in small WP-Cron batches. Only URLs on the current site host are accepted.
 * Selective purge: when enabled, editing a post clears its permalink, the home page, and related archives instead of every cached page.
 * Asset optimization: conservative HTML, CSS, and JavaScript minification. Local CSS files may be combined only when they are adjacent and share the same media attribute, preserving cascade order.
-* Loading optimization: native image and iframe lazy loading, configurable first-image skipping, optional script deferral, and rule-based delayed JavaScript.
+* Loading optimization: native image and iframe lazy loading, configurable first-image skipping, optional script deferral, rule-based delayed JavaScript, and ready-made presets for common third-party scripts.
+* CSS delivery: optional non-blocking CSS loading with a sensible default exclusion for the core theme stylesheet, noscript fallbacks, and a field for custom critical CSS.
 * CDN rewriting: optionally rewrite local static asset URLs while leaving page links and dynamic endpoints unchanged.
 * Versioning: each settings change increments the asset version and refreshes cached pages.
 * Safety: capability checks, nonces, input sanitization, output escaping, path whitelists, atomic cache writes, and an error log.
@@ -48,6 +49,14 @@ Stylesheets are combined only when they are adjacent in the HTML and share the s
 
 Delay JS only affects scripts matching the configured rules. Matching external scripts are loaded after the first user interaction or after five seconds. Leave the rules empty to disable delayed execution.
 
+= Which scripts are covered by the third-party delay preset? =
+
+The preset matches common reCAPTCHA, Google Tag Manager, Google Analytics, Google Ads, Facebook Pixel, and Cloudflare Beacon URLs. It is independent of the custom Delay JS rules and is disabled by default. Test forms and analytics after enabling it.
+
+= How does asynchronous CSS loading work? =
+
+Eligible stylesheets are changed to load without blocking rendering, with a noscript fallback. The default exclusion keeps the Astra core stylesheet blocking. Custom critical CSS can be injected into the document head. Disable the option if a theme depends on immediate stylesheet availability.
+
 = Does preloading contact external sites? =
 
 No. Preloading only requests URLs on the current site host. Custom URLs on other hosts are rejected, and sitemap discovery is limited to two common local sitemap paths.
@@ -61,6 +70,12 @@ Use the cache tools on the plugin settings page. Page caches also expire accordi
 Cached HTML contains the nonce generated when the page was built. If a form fails because its nonce expired, purge the cache and reload the page.
 
 == Changelog ==
+
+= 1.3.0 =
+* Added a third-party delay preset for common analytics, advertising, and reCAPTCHA scripts.
+* Added optional asynchronous CSS loading with noscript fallbacks and configurable exclusions.
+* Added a custom critical CSS field injected into the document head.
+* All new loading optimizations are disabled by default.
 
 = 1.2.1 =
 * Prepared the plugin for submission to the WordPress.org Plugin Directory.
