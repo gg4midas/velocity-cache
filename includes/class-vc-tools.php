@@ -372,7 +372,7 @@ final class VC_Tools {
 		$value = (string) $value;
 		foreach ( self::rule_list( $raw ) as $rule ) {
 			$pattern = str_replace( array( '\*', '\?' ), array( '.*', '.' ), preg_quote( $rule, '~' ) );
-			if ( @preg_match( '~^' . $pattern . '$~i', $value ) ) {
+			if ( @preg_match( '~^' . $pattern . '$~is', $value ) ) {
 				return true;
 			}
 		}

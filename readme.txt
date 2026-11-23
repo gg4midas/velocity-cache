@@ -4,7 +4,7 @@ Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -70,6 +70,10 @@ Use the cache tools on the plugin settings page. Page caches also expire accordi
 Cached HTML contains the nonce generated when the page was built. If a form fails because its nonce expired, purge the cache and reload the page.
 
 == Changelog ==
+
+= 1.3.1 =
+* Fixed rule matching across line breaks for multiline inline script loaders.
+* Restricted inline delay to actual script loaders so configuration and event scripts are not delayed accidentally.
 
 = 1.3.0 =
 * Added a third-party delay preset for common analytics, advertising, and reCAPTCHA scripts.
