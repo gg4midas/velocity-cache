@@ -25,6 +25,19 @@ final class VC_Settings {
 			'enable_css_minify' => 1,
 			'enable_css_combine'=> 0,
 			'enable_js_minify'  => 1,
+			'enable_preload'    => 0,
+			'enable_selective_purge' => 0,
+			'enable_304'        => 0,
+			'enable_compression'=> 0,
+			'enable_lazyload'   => 0,
+			'lazyload_iframes'  => 0,
+			'lazyload_skip'     => 2,
+			'enable_js_defer'   => 0,
+			'enable_js_delay'   => 0,
+			'enable_cdn'        => 0,
+			'cdn_url'           => '',
+			'preload_urls'      => '',
+			'delay_js_handles'  => '',
 			'cache_ttl'         => 3600,
 			'cache_logged_in'   => 0,
 			'cache_query'       => 0,
@@ -89,6 +102,15 @@ final class VC_Settings {
 			'enable_css_minify',
 			'enable_css_combine',
 			'enable_js_minify',
+			'enable_preload',
+			'enable_selective_purge',
+			'enable_304',
+			'enable_compression',
+			'enable_lazyload',
+			'lazyload_iframes',
+			'enable_js_defer',
+			'enable_js_delay',
+			'enable_cdn',
 			'cache_logged_in',
 			'cache_query',
 			'log_errors',
@@ -101,7 +123,11 @@ final class VC_Settings {
 		$ttl           = isset( $input['cache_ttl'] ) ? absint( $input['cache_ttl'] ) : $defaults['cache_ttl'];
 		$clean['cache_ttl'] = min( 2592000, max( 0, $ttl ) );
 
-		foreach ( array( 'exclude_urls', 'exclude_cookies', 'exclude_css_handles', 'exclude_js_handles' ) as $key ) {
+		$clean['lazyload_skip'] = isset( $input['lazyload_skip'] ) ? min( 20, absint( $input['lazyload_skip'] ) ) : $defaults['lazyload_skip'];
+		$cdn_url = isset( $input['cdn_url'] ) && is_scalar( $input['cdn_url'] ) ? esc_url_raw( trim( (string) $input['cdn_url'] ) ) : '';
+		$clean['cdn_url'] = $cdn_url ? untrailingslashit( $cdn_url ) : '';
+
+		foreach ( array( 'exclude_urls', 'exclude_cookies', 'exclude_css_handles', 'exclude_js_handles', 'preload_urls', 'delay_js_handles' ) as $key ) {
 			$raw = isset( $input[ $key ] ) ? $input[ $key ] : '';
 			$clean[ $key ] = implode( "\n", VC_Tools::rule_list( is_scalar( $raw ) ? $raw : '' ) );
 		}

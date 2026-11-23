@@ -29,6 +29,18 @@ final class VC_Optimizer {
 			$html = self::optimize_js( $html, $settings );
 		}
 
+		if ( ! empty( $settings['enable_js_defer'] ) || ! empty( $settings['enable_js_delay'] ) ) {
+			$html = self::optimize_script_loading( $html, $settings );
+		}
+
+		if ( ! empty( $settings['enable_lazyload'] ) || ! empty( $settings['lazyload_iframes'] ) ) {
+			$html = self::optimize_lazyload( $html, $settings );
+		}
+
+		if ( ! empty( $settings['enable_cdn'] ) && ! empty( $settings['cdn_url'] ) ) {
+			$html = self::rewrite_cdn( $html, $settings['cdn_url'] );
+		}
+
 		if ( ! empty( $settings['enable_html_minify'] ) ) {
 			$html = VC_Tools::minify_html( $html );
 		}
@@ -321,7 +333,7 @@ final class VC_Optimizer {
 				}
 
 				$url     = VC_Tools::cache_base_url() . 'assets/js/' . $hash . '?ver=vc' . $version;
-				$newfull = substr_replace( $full, 'src="' . esc_url( $url ) . '"', $src_match[2][1], strlen( $src_raw ) );
+				$newfull = substr_replace( $full, esc_url( $url ), $src_match[2][1], strlen( $src_raw ) );
 			} else {
 				$inline = substr( $full, strlen( $open ), -9 );
 				if ( false !== strpos( $inline, '<!--' ) || false !== strpos( $inline, '<![CDATA[' ) ) {
@@ -351,5 +363,171 @@ final class VC_Optimizer {
 		}
 
 		return $html;
+	}
+
+	/**
+	 * 使用浏览器原生 LazyLoad，跳过首屏图片和显式排除元素。
+	 *
+	 * @param string $html     HTML。
+	 * @param array  $settings 设置。
+	 * @return string
+	 */
+	private static function optimize_lazyload( $html, $settings ) {
+		if ( ! empty( $settings['enable_lazyload'] ) ) {
+			$seen = 0;
+			$skip = isset( $settings['lazyload_skip'] ) ? (int) $settings['lazyload_skip'] : 2;
+			$html = preg_replace_callback(
+				'/<img\b[^>]*>/i',
+				static function ( $matches ) use ( &$seen, $skip ) {
+					$seen++;
+					$tag = $matches[0];
+					if ( $seen <= $skip || preg_match( '/\b(?:loading|fetchpriority)\s*=/i', $tag ) || preg_match( '/(?:no-lazy|skip-lazy|data-no-lazy)/i', $tag ) ) {
+						return $tag;
+					}
+
+					$attributes = ' loading="lazy"';
+					if ( ! preg_match( '/\bdecoding\s*=/i', $tag ) ) {
+						$attributes .= ' decoding="async"';
+					}
+					return '<img' . $attributes . substr( $tag, 4 );
+				},
+				$html
+			);
+		}
+
+		if ( ! empty( $settings['lazyload_iframes'] ) ) {
+			$html = preg_replace_callback(
+				'/<iframe\b[^>]*>/i',
+				static function ( $matches ) {
+					$tag = $matches[0];
+					if ( preg_match( '/\bloading\s*=/i', $tag ) || preg_match( '/(?:no-lazy|skip-lazy|data-no-lazy)/i', $tag ) ) {
+						return $tag;
+					}
+					return '<iframe loading="lazy"' . substr( $tag, 7 );
+				},
+				$html
+			);
+		}
+
+		return $html;
+	}
+
+	/**
+	 * 为外链脚本增加 defer，或仅把明确匹配的脚本延迟到交互后执行。
+	 *
+	 * @param string $html     HTML。
+	 * @param array  $settings 设置。
+	 * @return string
+	 */
+	private static function optimize_script_loading( $html, $settings ) {
+		$count = preg_match_all( '/<script\b[^>]*>.*?<\/script>/is', $html, $matches, PREG_OFFSET_CAPTURE );
+		if ( ! $count ) {
+			return $html;
+		}
+
+		$exclude      = isset( $settings['exclude_js_handles'] ) ? $settings['exclude_js_handles'] : '';
+		$delay_rules  = isset( $settings['delay_js_handles'] ) ? $settings['delay_js_handles'] : '';
+		$replacements = array();
+		$delayed      = false;
+
+		foreach ( $matches[0] as $found ) {
+			$full   = $found[0];
+			$offset = $found[1];
+			if ( ! preg_match( '/^<script\b[^>]*>/i', $full, $open_match ) ) {
+				continue;
+			}
+			$open = $open_match[0];
+
+			if ( preg_match( '/\b(?:async|defer|nomodule)\b/i', $open ) || preg_match( '/\btype\s*=\s*(["\'])(?:module|application\/json|text\/template)\1/i', $open ) ) {
+				continue;
+			}
+			if ( ! preg_match( '/\bsrc\s*=\s*(["\'])(.*?)\1/i', $open, $src_match, PREG_OFFSET_CAPTURE ) ) {
+				continue;
+			}
+
+			$src      = html_entity_decode( $src_match[2][0], ENT_QUOTES, get_option( 'blog_charset' ) );
+			$identity = $src;
+			if ( preg_match( '/\bid\s*=\s*(["\'])([^"\']+)\1/i', $open, $id_match ) ) {
+				$identity = $id_match[2];
+			}
+
+			$delay = ! empty( $settings['enable_js_delay'] ) && ( VC_Tools::match_rules( $src, $delay_rules ) || VC_Tools::match_rules( $identity, $delay_rules ) );
+			if ( $delay ) {
+				$without_src = substr_replace( $open, '', $src_match[0][1], strlen( $src_match[0][0] ) );
+				$without_src = preg_replace( '/\s+type\s*=\s*(["\']).*?\1/i', '', $without_src );
+				$new_open    = '<script type="velocity-lazy" data-vc-delay="1" data-vc-src="' . esc_attr( $src ) . '"' . substr( $without_src, 7 );
+				$newfull     = $new_open . substr( $full, strlen( $open ) );
+				$delayed     = true;
+			} elseif ( ! empty( $settings['enable_js_defer'] ) && false === stripos( $src . ' ' . $identity, 'jquery' ) && ! VC_Tools::match_rules( $src, $exclude ) && ! VC_Tools::match_rules( $identity, $exclude ) ) {
+				$newfull = '<script defer="defer"' . substr( $full, 7 );
+			} else {
+				continue;
+			}
+
+			$replacements[] = array( 'offset' => $offset, 'length' => strlen( $full ), 'value' => $newfull );
+		}
+
+		usort(
+			$replacements,
+			static function ( $a, $b ) {
+				return $b['offset'] <=> $a['offset'];
+			}
+		);
+		foreach ( $replacements as $replacement ) {
+			$html = substr_replace( $html, $replacement['value'], $replacement['offset'], $replacement['length'] );
+		}
+
+		if ( $delayed ) {
+			$bootstrap = '<script id="vc-delay-bootstrap">(function(){var done=false;function load(){if(done)return;done=true;var nodes=document.querySelectorAll("script[data-vc-delay][data-vc-src]");Array.prototype.forEach.call(nodes,function(old){var s=document.createElement("script");Array.prototype.forEach.call(old.attributes,function(a){if(a.name!=="type"&&a.name!=="data-vc-delay"&&a.name!=="data-vc-src")s.setAttribute(a.name,a.value);});s.async=false;s.src=old.getAttribute("data-vc-src");old.parentNode.insertBefore(s,old);old.parentNode.removeChild(old);});}["mousemove","keydown","scroll","touchstart","click"].forEach(function(e){document.addEventListener(e,load,{once:true,passive:true});});window.setTimeout(load,5000);})();</script>';
+			$pos       = stripos( $html, '</body>' );
+			$html      = false === $pos ? $html . $bootstrap : substr_replace( $html, $bootstrap, $pos, 0 );
+		}
+
+		return $html;
+	}
+
+	/**
+	 * 仅重写本地静态资源的 src/href，不修改页面链接和动态端点。
+	 *
+	 * @param string $html    HTML。
+	 * @param string $cdn_url CDN 前缀。
+	 * @return string
+	 */
+	private static function rewrite_cdn( $html, $cdn_url ) {
+		$cdn_url = untrailingslashit( $cdn_url );
+		$content = trailingslashit( content_url( '/' ) );
+		$includes = trailingslashit( includes_url() );
+		$content_path = wp_parse_url( $content, PHP_URL_PATH );
+		$includes_path = wp_parse_url( $includes, PHP_URL_PATH );
+		$content_path = is_string( $content_path ) ? trailingslashit( $content_path ) : '/wp-content/';
+		$includes_path = is_string( $includes_path ) ? trailingslashit( $includes_path ) : '/wp-includes/';
+		$map      = array(
+			$content  => $cdn_url . $content_path,
+			$includes => $cdn_url . $includes_path,
+		);
+		$map[ preg_replace( '~^https?:~', '', $content ) ]  = $cdn_url . $content_path;
+		$map[ preg_replace( '~^https?:~', '', $includes ) ] = $cdn_url . $includes_path;
+
+		$result = preg_replace_callback(
+			'/\b(src|href)\s*=\s*(["\'])(.*?)\2/i',
+			static function ( $matches ) use ( $map ) {
+				$url = html_entity_decode( $matches[3], ENT_QUOTES, get_option( 'blog_charset' ) );
+				$path = wp_parse_url( $url, PHP_URL_PATH );
+				if ( ! is_string( $path ) || ! preg_match( '/\.(?:css|js|png|jpe?g|gif|webp|avif|svg|woff2?|ttf|eot)$/i', $path ) ) {
+					return $matches[0];
+				}
+
+				foreach ( $map as $local => $cdn ) {
+					if ( 0 === strpos( $url, $local ) ) {
+						$url = $cdn . substr( $url, strlen( $local ) );
+						break;
+					}
+				}
+				return $matches[1] . '=' . $matches[2] . esc_url( $url ) . $matches[2];
+			},
+			$html
+		);
+
+		return null === $result ? $html : $result;
 	}
 }

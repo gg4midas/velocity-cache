@@ -52,6 +52,14 @@ defined( 'ABSPATH' ) || exit;
 				<?php esc_html_e( '递增资源版本号', 'velocity-cache' ); ?>
 			</button>
 		</form>
+
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="vc_preload">
+			<?php wp_nonce_field( 'vc_preload' ); ?>
+			<button type="submit" class="button button-secondary">
+				<?php esc_html_e( '开始预加载', 'velocity-cache' ); ?>
+			</button>
+		</form>
 	</div>
 
 	<h2><?php esc_html_e( '运行状态', 'velocity-cache' ); ?></h2>

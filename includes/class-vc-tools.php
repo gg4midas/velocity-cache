@@ -312,6 +312,28 @@ final class VC_Tools {
 	}
 
 	/**
+	 * 根据站内 URL 生成匿名缓存键，用于精确清理。
+	 *
+	 * @param string $url        完整站内 URL。
+	 * @param bool   $with_query 是否计入查询串。
+	 * @return string 非法或站外 URL 返回空串。
+	 */
+	public static function url_key( $url, $with_query = false ) {
+		$parts = wp_parse_url( $url );
+		$home  = wp_parse_url( home_url( '/' ) );
+		if ( ! is_array( $parts ) || ! is_array( $home ) || empty( $parts['host'] ) || empty( $home['host'] ) || strtolower( $parts['host'] ) !== strtolower( $home['host'] ) ) {
+			return '';
+		}
+
+		$scheme = isset( $parts['scheme'] ) ? strtolower( $parts['scheme'] ) : ( is_ssl() ? 'https' : 'http' );
+		$host   = strtolower( $parts['host'] );
+		$path   = isset( $parts['path'] ) ? $parts['path'] : '/';
+		$query  = $with_query && isset( $parts['query'] ) ? $parts['query'] : '';
+
+		return md5( $scheme . '|' . $host . '|' . $path . '|' . $query . '|user:0' );
+	}
+
+	/**
 	 * 解析规则列表（每行一条，最多 100 条）。
 	 *
 	 * @param string $raw 原始文本。
@@ -741,9 +763,13 @@ final class VC_Tools {
 				}
 
 				$name = $file->getFilename();
-				if ( 'index.php' !== $name && '.htaccess' !== $name ) {
-					$count++;
+				if ( 'index.php' === $name || '.htaccess' === $name ) {
+					continue;
 				}
+				if ( 'pages' === $sub && '.html' !== substr( $name, -5 ) ) {
+					continue;
+				}
+				$count++;
 			}
 		} catch ( \Exception $e ) {
 			return 0;

@@ -22,6 +22,7 @@ final class VC_Admin {
 		add_filter( 'plugin_action_links_' . plugin_basename( VC_FILE ), array( $this, 'plugin_action_links' ) );
 		add_action( 'admin_post_vc_purge_cache', array( $this, 'handle_purge' ) );
 		add_action( 'admin_post_vc_bump_version', array( $this, 'handle_bump' ) );
+		add_action( 'admin_post_vc_preload', array( $this, 'handle_preload' ) );
 		add_action( 'admin_notices', array( $this, 'notices' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 	}
@@ -121,6 +122,27 @@ final class VC_Admin {
 			array( 'key' => 'cache_query', 'desc' => __( '默认关闭，避免 ?utm_ 等参数产生大量重复缓存。', 'velocity-cache' ) )
 		);
 
+		foreach (
+			array(
+				'enable_selective_purge' => array( __( '关联清除', 'velocity-cache' ), __( '编辑文章时只清文章页、首页及关联归档；关闭则全站清页面缓存。', 'velocity-cache' ) ),
+				'enable_304'             => array( __( '304 条件请求', 'velocity-cache' ), __( '支持 ETag 与 Last-Modified，内容未变化时返回 304。', 'velocity-cache' ) ),
+				'enable_compression'     => array( __( 'Brotli / Gzip 预压缩', 'velocity-cache' ), __( '生成 .br/.gz 缓存变体并按 Accept-Encoding 投递；扩展不可用时只生成可用格式。', 'velocity-cache' ) ),
+			) as $key => $labels
+		) {
+			add_settings_field( $key, $labels[0], array( $this, 'checkbox_field' ), VC_Settings::PAGE, 'vc_section_cache', array( 'key' => $key, 'desc' => $labels[1] ) );
+		}
+
+		add_settings_section(
+			'vc_section_preload',
+			__( '缓存预加载', 'velocity-cache' ),
+			static function () {
+				echo '<p class="description">' . esc_html__( '手动预加载可使用自定义 URL 或自动读取站点地图；自动预加载会在全量清理后后台建队。', 'velocity-cache' ) . '</p>';
+			},
+			VC_Settings::PAGE
+		);
+		add_settings_field( 'enable_preload', __( '自动预加载', 'velocity-cache' ), array( $this, 'checkbox_field' ), VC_Settings::PAGE, 'vc_section_preload', array( 'key' => 'enable_preload', 'desc' => __( '全量清理后通过 WP-Cron 分批预加载，每批 5 个 URL，最多 200 个。', 'velocity-cache' ) ) );
+		add_settings_field( 'preload_urls', __( '预加载 URL', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_preload', array( 'key' => 'preload_urls', 'desc' => __( '每行一个完整站内 URL。留空则读取 wp-sitemap.xml 或 sitemap_index.xml，并始终包含首页。', 'velocity-cache' ) ) );
+
 		add_settings_section(
 			'vc_section_minify',
 			__( '资源优化', 'velocity-cache' ),
@@ -165,6 +187,29 @@ final class VC_Admin {
 			'vc_section_minify',
 			array( 'key' => 'enable_js_minify', 'desc' => __( '压缩本地脚本与内联脚本，跳过 module/async/defer。', 'velocity-cache' ) )
 		);
+
+		add_settings_section(
+			'vc_section_loading',
+			__( '加载优化', 'velocity-cache' ),
+			static function () {
+				echo '<p class="description">' . esc_html__( 'LazyLoad 使用浏览器原生能力；Defer 与 Delay JS 可能改变脚本时序，请逐站测试。', 'velocity-cache' ) . '</p>';
+			},
+			VC_Settings::PAGE
+		);
+		foreach (
+			array(
+				'enable_lazyload'  => array( __( '图片 LazyLoad', 'velocity-cache' ), __( '为图片添加 loading=lazy 与 decoding=async，已有 loading 或 no-lazy/skip-lazy 标记的图片跳过。', 'velocity-cache' ) ),
+				'lazyload_iframes' => array( __( 'iframe LazyLoad', 'velocity-cache' ), __( '延迟加载视频、地图等 iframe。', 'velocity-cache' ) ),
+				'enable_js_defer'  => array( __( 'JavaScript Defer', 'velocity-cache' ), __( '为外链脚本添加 defer；jQuery、已有 async/defer/module 和排除规则中的脚本跳过。', 'velocity-cache' ) ),
+				'enable_js_delay'  => array( __( '按规则 Delay JS', 'velocity-cache' ), __( '仅延迟下方规则匹配的脚本，首次交互或 5 秒后恢复执行。', 'velocity-cache' ) ),
+				'enable_cdn'       => array( __( 'CDN 地址重写', 'velocity-cache' ), __( '仅重写本地静态资源的 src/href，不改页面链接、srcset 或动态端点。', 'velocity-cache' ) ),
+			) as $key => $labels
+		) {
+			add_settings_field( $key, $labels[0], array( $this, 'checkbox_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => $key, 'desc' => $labels[1] ) );
+		}
+		add_settings_field( 'lazyload_skip', __( '首屏图片跳过数', 'velocity-cache' ), array( $this, 'number_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'lazyload_skip', 'desc' => __( '前 N 张图片不延迟，默认 2，最大 20。', 'velocity-cache' ) ) );
+		add_settings_field( 'delay_js_handles', __( 'Delay JS 规则', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'delay_js_handles', 'desc' => __( '每行一条 handle 或 URL 规则，支持 * 与 ?；留空时不会延迟任何脚本。', 'velocity-cache' ) ) );
+		add_settings_field( 'cdn_url', __( 'CDN URL', 'velocity-cache' ), array( $this, 'text_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'cdn_url', 'desc' => __( '例如 https://cdn.example.com，对应原站根路径并保留 wp-content/wp-includes 目录。', 'velocity-cache' ) ) );
 
 		add_settings_section(
 			'vc_section_rules',
@@ -241,13 +286,34 @@ final class VC_Admin {
 	public function number_field( $args ) {
 		$settings = VC_Settings::get();
 		$key      = $args['key'];
+		$max      = 'lazyload_skip' === $key ? 20 : 2592000;
 		printf(
-			'<input type="number" min="0" max="2592000" step="1" name="%1$s[%2$s]" value="%3$d" class="small-text">',
+			'<input type="number" min="0" max="%4$d" step="1" name="%1$s[%2$s]" value="%3$d" class="small-text">',
 			esc_attr( VC_Settings::OPTION ),
 			esc_attr( $key ),
-			(int) $settings[ $key ]
+			(int) $settings[ $key ],
+			$max
 		);
 
+		if ( ! empty( $args['desc'] ) ) {
+			printf( '<p class="description">%s</p>', esc_html( $args['desc'] ) );
+		}
+	}
+
+	/**
+	 * 单行文本字段。
+	 *
+	 * @param array $args 字段参数。
+	 */
+	public function text_field( $args ) {
+		$settings = VC_Settings::get();
+		$key      = $args['key'];
+		printf(
+			'<input type="url" name="%1$s[%2$s]" value="%3$s" class="regular-text" placeholder="https://cdn.example.com">',
+			esc_attr( VC_Settings::OPTION ),
+			esc_attr( $key ),
+			esc_attr( $settings[ $key ] )
+		);
 		if ( ! empty( $args['desc'] ) ) {
 			printf( '<p class="description">%s</p>', esc_html( $args['desc'] ) );
 		}
@@ -302,6 +368,27 @@ final class VC_Admin {
 
 		$result = VC_Cache::bump_version();
 		$this->set_notice( $result, __( '资源版本号已递增，缓存已清理。', 'velocity-cache' ) );
+		$this->redirect_back();
+	}
+
+	/**
+	 * 建立预加载队列并尽快触发 WP-Cron。
+	 */
+	public function handle_preload() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( '你没有权限执行此操作。', 'velocity-cache' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'vc_preload' );
+
+		$result = VC_Preloader::schedule();
+		if ( is_wp_error( $result ) ) {
+			$this->set_notice( $result, '' );
+		} else {
+			$this->set_notice( true, sprintf( __( '已加入 %d 个预加载 URL，将由 WP-Cron 分批处理。', 'velocity-cache' ), $result ) );
+			if ( function_exists( 'spawn_cron' ) ) {
+				spawn_cron();
+			}
+		}
 		$this->redirect_back();
 	}
 
@@ -383,6 +470,16 @@ final class VC_Admin {
 	private function status_rows() {
 		$root     = VC_Tools::cache_root();
 		$last     = (int) get_transient( 'vc_last_purge' );
+		$preload  = get_transient( 'vc_last_preload' );
+		$preload_text = __( '暂无', 'velocity-cache' );
+		if ( is_array( $preload ) && ! empty( $preload['time'] ) ) {
+			$preload_text = sprintf(
+				__( '%1$s（成功 %2$d，失败 %3$d）', 'velocity-cache' ),
+				wp_date( 'Y-m-d H:i:s', (int) $preload['time'] ),
+				(int) $preload['success'],
+				(int) $preload['failed']
+			);
+		}
 
 		return array(
 			__( '缓存目录', 'velocity-cache' ) => $root,
@@ -391,6 +488,8 @@ final class VC_Admin {
 			__( '优化资源文件', 'velocity-cache' ) => (string) VC_Tools::count_files( 'assets' ),
 			__( '资源版本号', 'velocity-cache' ) => 'v' . (int) VC_Settings::get()['asset_version'],
 			__( '上次清理时间', 'velocity-cache' ) => $last ? wp_date( 'Y-m-d H:i:s', $last ) : __( '暂无', 'velocity-cache' ),
+			__( '预加载队列', 'velocity-cache' ) => (string) VC_Preloader::queue_count(),
+			__( '上次预加载', 'velocity-cache' ) => $preload_text,
 		);
 	}
 }

@@ -155,24 +155,69 @@ final class VC_Cache {
 
 		$ttl = (int) $settings['cache_ttl'];
 		if ( $ttl > 0 && time() - (int) filemtime( $file ) > $ttl ) {
-			@unlink( $file );
+			self::delete_variants( $file );
 			return false;
 		}
 
-		$html = @file_get_contents( $file );
-		if ( false === $html || '' === $html ) {
+		$serve_file = $file;
+		$encoding   = '';
+		$accept     = isset( $_SERVER['HTTP_ACCEPT_ENCODING'] ) ? strtolower( (string) $_SERVER['HTTP_ACCEPT_ENCODING'] ) : '';
+
+		if ( ! empty( $settings['enable_compression'] ) ) {
+			if ( false !== strpos( $accept, 'br' ) && is_file( $file . '.br' ) ) {
+				$serve_file = $file . '.br';
+				$encoding   = 'br';
+			} elseif ( false !== strpos( $accept, 'gzip' ) && is_file( $file . '.gz' ) ) {
+				$serve_file = $file . '.gz';
+				$encoding   = 'gzip';
+			}
+		}
+
+		if ( ! is_file( $serve_file ) || filesize( $serve_file ) < 1 ) {
 			return false;
 		}
+
+		$mtime = (int) filemtime( $file );
+		$etag  = ! empty( $settings['enable_304'] ) ? '"' . md5_file( $serve_file ) . '"' : '';
 
 		if ( ! headers_sent() ) {
 			$visibility = is_user_logged_in() ? 'private' : 'public';
 			header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
 			header( 'X-VC-Cache: HIT' );
 			header( $ttl > 0 ? 'Cache-Control: ' . $visibility . ', max-age=' . $ttl : 'Cache-Control: ' . $visibility );
+			if ( ! empty( $settings['enable_304'] ) ) {
+				header( 'ETag: ' . $etag );
+				header( 'Last-Modified: ' . gmdate( 'D, d M Y H:i:s', $mtime ) . ' GMT' );
+			}
+			if ( ! empty( $settings['enable_compression'] ) ) {
+				header( 'Vary: Accept-Encoding' );
+			}
+			if ( $encoding ) {
+				header( 'Content-Encoding: ' . $encoding );
+			}
 		}
 
+		if ( ! empty( $settings['enable_304'] ) ) {
+			$if_none_match = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? str_replace( '\\', '', trim( (string) $_SERVER['HTTP_IF_NONE_MATCH'] ) ) : '';
+			$not_modified  = $if_none_match && ( '*' === $if_none_match || false !== strpos( $if_none_match, $etag ) );
+
+			if ( ! $if_none_match && isset( $_SERVER['HTTP_IF_MODIFIED_SINCE'] ) ) {
+				$since        = strtotime( (string) $_SERVER['HTTP_IF_MODIFIED_SINCE'] );
+				$not_modified = false !== $since && $since >= $mtime;
+			}
+
+			if ( $not_modified ) {
+				status_header( 304 );
+				$this->served = true;
+				exit;
+			}
+		}
+
+		if ( ! headers_sent() ) {
+			header( 'Content-Length: ' . filesize( $serve_file ) );
+		}
 		$this->served = true;
-		echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 已缓存的本机 HTML。
+		readfile( $serve_file );
 
 		if ( function_exists( 'fastcgi_finish_request' ) ) {
 			@fastcgi_finish_request();
@@ -236,6 +281,22 @@ final class VC_Cache {
 		$result = VC_Tools::write_file( $file, $html );
 		if ( is_wp_error( $result ) ) {
 			VC_Tools::log( 'page cache write failed', array( 'error' => $result->get_error_message() ) );
+			return;
+		}
+
+		if ( ! empty( $settings['enable_compression'] ) ) {
+			if ( function_exists( 'gzencode' ) ) {
+				$compressed = gzencode( $html, 6 );
+				if ( false !== $compressed ) {
+					VC_Tools::write_file( $file . '.gz', $compressed );
+				}
+			}
+			if ( function_exists( 'brotli_compress' ) ) {
+				$compressed = brotli_compress( $html, 6 );
+				if ( false !== $compressed ) {
+					VC_Tools::write_file( $file . '.br', $compressed );
+				}
+			}
 		}
 	}
 
@@ -249,6 +310,19 @@ final class VC_Cache {
 		$key = preg_replace( '/[^a-f0-9]/', '', $key );
 
 		return VC_Tools::sub_path( 'pages', substr( $key, 0, 2 ) . '/' . substr( $key, 2, 2 ) . '/' . $key . '.html' );
+	}
+
+	/**
+	 * 删除页面缓存及其压缩变体。
+	 *
+	 * @param string $file 原始 HTML 文件。
+	 */
+	private static function delete_variants( $file ) {
+		foreach ( array( '', '.gz', '.br' ) as $suffix ) {
+			if ( is_file( $file . $suffix ) ) {
+				@unlink( $file . $suffix );
+			}
+		}
 	}
 
 	/**
@@ -273,6 +347,11 @@ final class VC_Cache {
 		set_transient( 'vc_last_purge', time(), DAY_IN_SECONDS );
 		VC_Tools::ensure_dirs();
 		VC_Tools::log( 'cache purge', array( 'assets' => $with_assets ? 1 : 0 ) );
+
+		$settings = VC_Settings::get();
+		if ( ! empty( $settings['enable_preload'] ) && class_exists( 'VC_Preloader' ) ) {
+			VC_Preloader::schedule_async();
+		}
 
 		return true;
 	}
@@ -309,7 +388,80 @@ final class VC_Cache {
 			}
 		}
 
+		$settings = VC_Settings::get();
+		if ( is_numeric( $arg ) && ! empty( $settings['enable_selective_purge'] ) && in_array( current_filter(), array( 'save_post', 'deleted_post' ), true ) ) {
+			self::purge_post( (int) $arg );
+			return;
+		}
+
 		self::purge_all( false );
+	}
+
+	/**
+	 * 清理一个站内 URL 的匿名页面缓存及压缩变体。
+	 *
+	 * @param string $url 站内 URL。
+	 * @return bool 是否找到并删除缓存。
+	 */
+	public static function purge_url( $url ) {
+		if ( ! is_string( $url ) || '' === $url ) {
+			return false;
+		}
+
+		$key  = VC_Tools::url_key( $url, false );
+		$file = $key ? self::key_file( $key ) : '';
+		if ( '' === $file || ! is_file( $file ) ) {
+			return false;
+		}
+
+		self::delete_variants( $file );
+		return true;
+	}
+
+	/**
+	 * 清理文章内容变化直接影响的页面，避免每次编辑都全站清空。
+	 *
+	 * @param int $post_id 文章 ID。
+	 */
+	private static function purge_post( $post_id ) {
+		$links = array( get_permalink( $post_id ), home_url( '/' ) );
+		$post  = get_post( $post_id );
+
+		if ( $post ) {
+			$archive = get_post_type_archive_link( $post->post_type );
+			if ( $archive ) {
+				$links[] = $archive;
+			}
+
+			foreach ( get_object_taxonomies( $post ) as $taxonomy ) {
+				$terms = get_the_terms( $post_id, $taxonomy );
+				if ( ! is_array( $terms ) ) {
+					continue;
+				}
+				foreach ( $terms as $term ) {
+					$link = get_term_link( $term );
+					if ( ! is_wp_error( $link ) ) {
+						$links[] = $link;
+					}
+				}
+			}
+
+			$links[] = get_author_posts_url( (int) $post->post_author );
+			$time    = strtotime( $post->post_date );
+			$links[] = get_year_link( gmdate( 'Y', $time ) );
+			$links[] = get_month_link( gmdate( 'Y', $time ), gmdate( 'm', $time ) );
+			$links[] = get_day_link( gmdate( 'Y', $time ), gmdate( 'm', $time ), gmdate( 'd', $time ) );
+		}
+
+		$purged = 0;
+		foreach ( array_unique( array_filter( $links ) ) as $url ) {
+			if ( self::purge_url( $url ) ) {
+				$purged++;
+			}
+		}
+
+		set_transient( 'vc_last_purge', time(), DAY_IN_SECONDS );
+		VC_Tools::log( 'selective cache purge', array( 'post_id' => $post_id, 'files' => $purged ) );
 	}
 
 	/**

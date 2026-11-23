@@ -33,6 +33,7 @@ final class VC_Plugin {
 		load_plugin_textdomain( 'velocity-cache', false, dirname( plugin_basename( VC_FILE ) ) . '/languages' );
 
 		VC_Cache::init();
+		VC_Preloader::init();
 
 		$admin = new VC_Admin();
 		$admin->init();
