@@ -534,7 +534,8 @@ final class VC_Optimizer {
 			$inline_end = strrpos( $full, '</script>' );
 			if ( $delay_enabled && false !== $inline_end && $inline_end > strlen( $open ) ) {
 				$body = substr( $full, strlen( $open ), $inline_end - strlen( $open ) );
-				if ( '' !== trim( $body ) && strlen( $body ) <= 8000 && VC_Tools::match_rules( $body, $delay_rules ) ) {
+				$is_loader = preg_match( '/createElement\s*\(/i', $body ) && preg_match( '/(?:\.src\s*=|insertBefore\s*\(|appendChild\s*\()/i', $body );
+				if ( $is_loader && '' !== trim( $body ) && strlen( $body ) <= 8000 && VC_Tools::match_rules( $body, $delay_rules ) ) {
 					$without_type = preg_replace( '/\s+type\s*=\s*(["\']).*?\1/i', '', $open );
 					// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Inline loader is deferred inside final cached HTML after the enqueue phase.
 					$new_open = '<script type="velocity-lazy-inline" data-vc-delay="1" data-vc-inline="' . base64_encode( $body ) . '"' . substr( $without_type, 7 );

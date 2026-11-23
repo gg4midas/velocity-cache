@@ -119,6 +119,11 @@ admin/                          设置页视图与静态资源
 
 ## 更新记录
 
+### 1.3.1
+
+- 修复规则匹配不跨换行的问题，真实多行 GTM/tracker 内联加载器可以正确延迟。
+- 限制内联延迟只处理动态创建并加载外部脚本的加载器，避免 WPForms 配置和事件脚本被误延迟。
+
 ### 1.3.0
 
 - 根据 PageSpeed 桌面报告新增常见第三方脚本延迟预设：reCAPTCHA、GTag/GTM、Google Ads、Facebook Pixel、Cloudflare Beacon。
