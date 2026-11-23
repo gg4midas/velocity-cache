@@ -30,8 +30,7 @@ final class VC_Plugin {
 	 * 初始化各模块。
 	 */
 	private function boot() {
-		load_plugin_textdomain( 'velocity-cache', false, dirname( plugin_basename( VC_FILE ) ) . '/languages' );
-
+		// WordPress.org loads translations for the plugin text domain automatically.
 		VC_Cache::init();
 		VC_Preloader::init();
 

@@ -56,10 +56,11 @@ function vc_uninstall_remove_dir( $dir, $root ) {
 		if ( is_dir( $path ) && ! is_link( $path ) ) {
 			vc_uninstall_remove_dir( $path, $root );
 		} else {
-			@unlink( $path );
+			wp_delete_file( $path );
 		}
 	}
 
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Removing an empty directory inside the plugin-owned cache root.
 	@rmdir( $dir );
 }
 

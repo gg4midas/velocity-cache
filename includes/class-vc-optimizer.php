@@ -455,7 +455,8 @@ final class VC_Optimizer {
 			if ( $delay ) {
 				$without_src = substr_replace( $open, '', $src_match[0][1], strlen( $src_match[0][0] ) );
 				$without_src = preg_replace( '/\s+type\s*=\s*(["\']).*?\1/i', '', $without_src );
-				$new_open    = '<script type="velocity-lazy" data-vc-delay="1" data-vc-src="' . esc_attr( $src ) . '"' . substr( $without_src, 7 );
+				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Inline bootstrap is injected into final cached HTML after the enqueue phase.
+				$new_open = '<script type="velocity-lazy" data-vc-delay="1" data-vc-src="' . esc_attr( $src ) . '"' . substr( $without_src, 7 );
 				$newfull     = $new_open . substr( $full, strlen( $open ) );
 				$delayed     = true;
 			} elseif ( ! empty( $settings['enable_js_defer'] ) && false === stripos( $src . ' ' . $identity, 'jquery' ) && ! VC_Tools::match_rules( $src, $exclude ) && ! VC_Tools::match_rules( $identity, $exclude ) ) {
