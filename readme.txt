@@ -4,7 +4,7 @@ Tags: cache, performance, minify, optimization, pagespeed, page-cache, css, java
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,7 @@ Velocity Cache 是一套独立的 WordPress 性能优化实现，不依赖、不
 
 * 页面缓存：仅对匿名访客的 GET 请求生成静态 HTML，支持 TTL 与手动清理。
 * HTML 压缩：移除注释与冗余空白，保留 `<pre>`、`<textarea>`、`<script>`、`<style>` 内容。
-* CSS 优化：可单独开启压缩、合并；合并时自动把相对 URL 绝对化，避免路径漂移。
+* CSS 优化：可单独开启压缩、合并；只合并相邻且 media 相同的样式表，保持级联顺序，并自动把相对 URL 绝对化。
 * JavaScript 优化：本地脚本与内联脚本压缩，跳过 `async` / `defer` / `module` 及外部域名脚本。
 * 文件版本控制：设置变更或手动操作会递增资源版本号，并写入资源 URL 与缓存文件名。
 * 排除规则：按 URL（支持 `*` 通配符）、Cookie 名、CSS/JS 关键词排除。
@@ -41,7 +41,7 @@ Velocity Cache 是一套独立的 WordPress 性能优化实现，不依赖、不
 
 = 为什么登录用户没有被缓存？ =
 
-默认只缓存匿名访客。如确需缓存登录用户，请开启「缓存已登录用户」，但注意这可能导致不同用户看到相同页面。
+默认只缓存匿名访客。如确需缓存登录用户，请开启「缓存已登录用户」并移除登录 Cookie 排除规则。缓存按用户 ID 隔离，个性化页面仍应谨慎开启。
 
 = 合并 CSS 后图片路径失效怎么办？ =
 
@@ -52,6 +52,14 @@ Velocity Cache 是一套独立的 WordPress 性能优化实现，不依赖、不
 在设置页点击「清理缓存」；内容更新、主题切换、菜单更新时页面缓存也会自动失效。
 
 == Changelog ==
+
+= 1.1.1 =
+* 保留 JS 自动分号插入所需换行，避免压缩改变脚本语义。
+* 修正 CSS 后代伪类选择器与 HTML 行内元素空白被误改的问题。
+* CSS 仅在原位置合并相邻且 media 相同的样式表，并保留标签属性。
+* 非 HTML 响应不优化；登录用户缓存按用户隔离并使用 private 响应头。
+* 修正深层缓存文件计数、Windows 路径兼容与权限拒绝响应码。
+* 清理后恢复目录防护文件，全部功能关闭时不再启用输出缓冲。
 
 = 1.1.0 =
 * 在插件列表页增加「设置」快捷入口。

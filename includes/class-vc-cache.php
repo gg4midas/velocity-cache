@@ -68,6 +68,11 @@ final class VC_Cache {
 
 		$settings = VC_Settings::get();
 
+		// 全部功能关闭时不启用输出缓冲，避免无意义的内存与回调开销。
+		if ( empty( $settings['enable_cache'] ) && empty( $settings['enable_html_minify'] ) && empty( $settings['enable_css_minify'] ) && empty( $settings['enable_css_combine'] ) && empty( $settings['enable_js_minify'] ) ) {
+			return;
+		}
+
 		if ( $this->should_cache( $settings ) && $this->serve( $settings ) ) {
 			return;
 		}
@@ -82,7 +87,12 @@ final class VC_Cache {
 	 * @return bool
 	 */
 	private function should_cache( $settings ) {
-		if ( empty( $settings['enable_cache'] ) ) {
+		if ( empty( $settings['enable_cache'] ) || ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) ) {
+			return false;
+		}
+
+		$status = http_response_code();
+		if ( false !== $status && 200 !== (int) $status ) {
 			return false;
 		}
 
@@ -105,7 +115,21 @@ final class VC_Cache {
 			return false;
 		}
 
-		// WooCommerce 等动态页面始终跳过。
+		// WooCommerce 动态页面始终跳过，兼容本地化 URL 与账户端点。
+		if ( function_exists( 'is_cart' ) && is_cart() ) {
+			return false;
+		}
+		if ( function_exists( 'is_checkout' ) && is_checkout() ) {
+			return false;
+		}
+		if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+			return false;
+		}
+		if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url() ) {
+			return false;
+		}
+
+		// 未安装 WooCommerce 时保留常见路径兜底。
 		foreach ( array( '/cart', '/checkout', '/my-account' ) as $fragment ) {
 			if ( false !== strpos( $path, $fragment ) ) {
 				return false;
@@ -141,9 +165,10 @@ final class VC_Cache {
 		}
 
 		if ( ! headers_sent() ) {
+			$visibility = is_user_logged_in() ? 'private' : 'public';
 			header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
 			header( 'X-VC-Cache: HIT' );
-			header( $ttl > 0 ? 'Cache-Control: public, max-age=' . $ttl : 'Cache-Control: public' );
+			header( $ttl > 0 ? 'Cache-Control: ' . $visibility . ', max-age=' . $ttl : 'Cache-Control: ' . $visibility );
 		}
 
 		$this->served = true;
@@ -175,7 +200,7 @@ final class VC_Cache {
 	 * @return string
 	 */
 	public function finalize( $html ) {
-		if ( $this->served || ! is_string( $html ) || '' === $html ) {
+		if ( $this->served || ! is_string( $html ) || '' === $html || ! VC_Tools::is_html_response() ) {
 			return $html;
 		}
 
@@ -246,6 +271,7 @@ final class VC_Cache {
 		}
 
 		set_transient( 'vc_last_purge', time(), DAY_IN_SECONDS );
+		VC_Tools::ensure_dirs();
 		VC_Tools::log( 'cache purge', array( 'assets' => $with_assets ? 1 : 0 ) );
 
 		return true;
