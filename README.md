@@ -4,9 +4,6 @@
 
 插件为独立实现，不依赖任何商业缓存插件的代码、品牌或界面。
 
-- GitHub: https://github.com/gg4midas/velocity-cache
-- Gitee: https://gitee.com/operations-go_0/velocity-cache
-
 ## 功能
 
 | 模块 | 说明 |
