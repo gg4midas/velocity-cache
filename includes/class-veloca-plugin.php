@@ -30,7 +30,9 @@ final class VELOCA_Plugin {
 	 * 初始化各模块。
 	 */
 	private function boot() {
-		// WordPress.org loads translations for the plugin text domain automatically.
+		// Load bundled translations so the settings UI follows the WordPress admin locale.
+		load_plugin_textdomain( 'velocity-cache', false, dirname( plugin_basename( VELOCA_FILE ) ) . '/languages' );
+
 		VELOCA_Tools::cleanup_legacy();
 		VELOCA_Cache::init();
 		VELOCA_Preloader::init();

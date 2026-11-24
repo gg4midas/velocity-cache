@@ -80,7 +80,7 @@ final class VELOCA_Settings {
 			array(
 				'type'              => 'array',
 				'group'             => self::GROUP,
-				'description'       => 'Velocity Cache 配置',
+				'description'       => __( 'Velocity Cache settings', 'velocity-cache' ),
 				'sanitize_callback' => array( __CLASS__, 'sanitize' ),
 				'show_in_rest'      => false,
 				'default'           => self::defaults(),

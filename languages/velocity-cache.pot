@@ -1,0 +1,349 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Velocity Cache 1.5.2\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-11-24 00:00+0000\n"
+"Last-Translator: Velocity Cache\n"
+"Language-Team: English\n"
+"Language: en_US\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "%1$s (%2$d succeeded, %3$d failed)"
+msgstr ""
+
+msgid "0 means never expire, refreshing only when content changes. Maximum 2592000 seconds."
+msgstr ""
+
+msgid "304 Conditional Requests"
+msgstr ""
+
+msgid "Above-the-Fold Images to Skip"
+msgstr ""
+
+msgid "Add defer to external scripts; skip jQuery, scripts already async/defer/module, and scripts matching exclusion rules."
+msgstr ""
+
+msgid "Add loading=lazy and decoding=async to images; skip images already having loading or no-lazy/skip-lazy markers."
+msgstr ""
+
+msgid "Added %d URLs to the preload queue; WP-Cron will process them in batches."
+msgstr ""
+
+msgid "Asset Optimization"
+msgstr ""
+
+msgid "Asset Version"
+msgstr ""
+
+msgid "Asset version incremented and cache purged."
+msgstr ""
+
+msgid "Async CSS Exclusions"
+msgstr ""
+
+msgid "Async Load Non-Critical CSS"
+msgstr ""
+
+msgid "Automatic Preload"
+msgstr ""
+
+msgid "Brotli / Gzip Pre-compression"
+msgstr ""
+
+msgid "Bump Asset Version"
+msgstr ""
+
+msgid "Bumping the asset version makes browsers re-download CSS/JS. Continue?"
+msgstr ""
+
+msgid "CDN URL Rewriting"
+msgstr ""
+
+msgid "CSS Combination"
+msgstr ""
+
+msgid "CSS Minification"
+msgstr ""
+
+msgid "Cache"
+msgstr ""
+
+msgid "Cache Directory"
+msgstr ""
+
+msgid "Cache Lifetime (Seconds)"
+msgstr ""
+
+msgid "Cache Logged-In Users"
+msgstr ""
+
+msgid "Cache Preloading"
+msgstr ""
+
+msgid "Cache Tools"
+msgstr ""
+
+msgid "Cache URLs With Query Strings"
+msgstr ""
+
+msgid "Cache only GET requests from anonymous visitors; dynamic pages and addresses in exclusion rules are not cached."
+msgstr ""
+
+msgid "Cache purged."
+msgstr ""
+
+msgid "Combine local stylesheets into one versioned file per media attribute."
+msgstr ""
+
+msgid "Conditional CSS Unloading"
+msgstr ""
+
+msgid "Conditional CSS Unloading Rules"
+msgstr ""
+
+msgid "Critical CSS"
+msgstr ""
+
+msgid "Delay Common Third-Party Scripts"
+msgstr ""
+
+msgid "Delay JS Rules"
+msgstr ""
+
+msgid "Delay JS by Rules"
+msgstr ""
+
+msgid "Delay only scripts matching the rules below; resume on first interaction or after 5 seconds."
+msgstr ""
+
+msgid "Delay reCAPTCHA, GTag/GTM, Google Ads, Facebook Pixel and Cloudflare Beacon; load on first interaction or after 5 seconds."
+msgstr ""
+
+msgid "Directory Writable"
+msgstr ""
+
+msgid "Disabled"
+msgstr ""
+
+msgid "Do not cache when any listed cookie name is present, for example wordpress_logged_in_*."
+msgstr ""
+
+msgid "Enabled"
+msgstr ""
+
+msgid "Error Handling"
+msgstr ""
+
+msgid "Exclude CSS"
+msgstr ""
+
+msgid "Exclude Cookie Names"
+msgstr ""
+
+msgid "Exclude JavaScript"
+msgstr ""
+
+msgid "Exclude URLs"
+msgstr ""
+
+msgid "Exclusion Rules"
+msgstr ""
+
+msgid "External assets, module scripts, async/defer scripts and stylesheets containing @import are skipped automatically."
+msgstr ""
+
+msgid "Failed to replace cache file: %s"
+msgstr ""
+
+msgid "Failed to write cache file: %s"
+msgstr ""
+
+msgid "For example https://cdn.example.com, mapped to the origin root while keeping wp-content/wp-includes paths."
+msgstr ""
+
+msgid "Generate .br/.gz cache variants served according to Accept-Encoding; when extensions are unavailable, only supported formats are generated."
+msgstr ""
+
+msgid "Generate static HTML and serve cache hits directly without loading the theme."
+msgstr ""
+
+msgid "HTML Minification"
+msgstr ""
+
+msgid "Image LazyLoad"
+msgstr ""
+
+msgid "Isolate cache by user ID; also remove the login cookie exclusion rule. Use with care on personalized pages."
+msgstr ""
+
+msgid "JavaScript Minification"
+msgstr ""
+
+msgid "Last Preload"
+msgstr ""
+
+msgid "Last Purge"
+msgstr ""
+
+msgid "Lazy load iframes such as videos and maps."
+msgstr ""
+
+msgid "LazyLoad uses native browser support; Defer and Delay JS may change script timing. Test on each site."
+msgstr ""
+
+msgid "Load non-excluded stylesheets without blocking rendering, with a noscript fallback; core theme styles are excluded by default."
+msgstr ""
+
+msgid "Loading Optimization"
+msgstr ""
+
+msgid "Log Errors"
+msgstr ""
+
+msgid "Log cache write failures and optimization errors for troubleshooting."
+msgstr ""
+
+msgid "Logs are written to wp-content/cache/velocity-cache/logs/errors.log and rotate automatically above 1 MB."
+msgstr ""
+
+msgid "Manual preload uses custom URLs or reads the sitemap; automatic preload queues URLs after a full purge."
+msgstr ""
+
+msgid "Match against the request path, for example /cart/* or /sitemap.xml."
+msgstr ""
+
+msgid "Minify local scripts and inline scripts, skipping module/async/defer."
+msgstr ""
+
+msgid "Minify local stylesheets and inline styles."
+msgstr ""
+
+msgid "No"
+msgstr ""
+
+msgid "None"
+msgstr ""
+
+msgid "Off by default to avoid duplicate caches from parameters such as ?utm_."
+msgstr ""
+
+msgid "One full internal URL per line. Leave blank to read wp-sitemap.xml or sitemap_index.xml; the homepage is always included."
+msgstr ""
+
+msgid "One handle or URL rule per line with * and ? wildcards; no script is delayed when empty."
+msgstr ""
+
+msgid "One per line: handle | marker1, marker2. Keep the stylesheet when the page DOM contains any marker; otherwise remove it. Markers are case-insensitive and script/style contents are ignored."
+msgstr ""
+
+msgid "One rule per line with * and ? wildcards. CSS/JS rules accept a handle name or URL keyword."
+msgstr ""
+
+msgid "Optimized Asset Files"
+msgstr ""
+
+msgid "Optional. Critical above-the-fold CSS is injected into the head; do not include style tags."
+msgstr ""
+
+msgid "Page Cache"
+msgstr ""
+
+msgid "Page Cache Files"
+msgstr ""
+
+msgid "Page cache, HTML/CSS/JS optimization and cache version management. All actions require manage_options and pass security checks."
+msgstr ""
+
+msgid "Preload Queue"
+msgstr ""
+
+msgid "Preload URLs"
+msgstr ""
+
+msgid "Preload in batches via WP-Cron after a full purge, 5 URLs per batch, up to 200."
+msgstr ""
+
+msgid "Purge All Cache"
+msgstr ""
+
+msgid "Purge Page Cache"
+msgstr ""
+
+msgid "Purge all page cache?"
+msgstr ""
+
+msgid "Purge page cache and optimized assets? Files will be rebuilt on the next request."
+msgstr ""
+
+msgid "Remove comments and extra whitespace while preserving pre/textarea/script/style."
+msgstr ""
+
+msgid "Rewrite only src/href of local static assets; page links, srcset and dynamic endpoints are untouched."
+msgstr ""
+
+msgid "Save Settings"
+msgstr ""
+
+msgid "Script URL keywords excluded from minification."
+msgstr ""
+
+msgid "Selective Purge"
+msgstr ""
+
+msgid "Settings"
+msgstr ""
+
+msgid "Settings saved and page cache refreshed. Current asset version: v%d"
+msgstr ""
+
+msgid "Skip lazy loading for the first N images; default 2, maximum 20."
+msgstr ""
+
+msgid "Start Preload"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "Stylesheet handles or URL keywords excluded from minification/combination."
+msgstr ""
+
+msgid "Support ETag and Last-Modified, returning 304 when content is unchanged."
+msgstr ""
+
+msgid "Unload a whole stylesheet when the page lacks all listed markers. This is full-file unloading; check each page type after enabling."
+msgstr ""
+
+msgid "Velocity Cache refreshed the page cache after a plugin %s."
+msgstr ""
+
+msgid "Velocity Cache requires PHP 7.4 or higher; the plugin has stopped loading."
+msgstr ""
+
+msgid "Velocity Cache settings"
+msgstr ""
+
+msgid "When editing a post, purge only the post, homepage and related archives; when off, purge all page cache."
+msgstr ""
+
+msgid "Yes"
+msgstr ""
+
+msgid "You are not allowed to access this page."
+msgstr ""
+
+msgid "You are not allowed to perform this action."
+msgstr ""
+
+msgid "activation"
+msgstr ""
+
+msgid "astra-theme-css is excluded by default; one handle or URL rule per line. Core layout styles must stay render-blocking."
+msgstr ""
+
+msgid "deactivation"
+msgstr ""
+

@@ -239,13 +239,13 @@ final class VELOCA_Tools {
 
 		if ( false === @file_put_contents( $tmp, $data, LOCK_EX ) ) {
 			wp_delete_file( $tmp );
-			return new WP_Error( 'veloca_write_failed', '缓存文件写入失败：' . $file );
+			return new WP_Error( 'veloca_write_failed', sprintf( __( 'Failed to write cache file: %s', 'velocity-cache' ), $file ) );
 		}
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Atomic rename is required for the cache write.
 		if ( ! @rename( $tmp, $file ) ) {
 			wp_delete_file( $tmp );
-			return new WP_Error( 'veloca_rename_failed', '缓存文件替换失败：' . $file );
+			return new WP_Error( 'veloca_rename_failed', sprintf( __( 'Failed to replace cache file: %s', 'velocity-cache' ), $file ) );
 		}
 
 		return true;
@@ -420,7 +420,130 @@ final class VELOCA_Tools {
 	}
 
 	/**
-	 * 本站允许的主机：主站加上 WPML 各语言域名（多域模式下子域也属于本站）。
+	 * 统一收集站点语言及其首页 URL，不写死语言数量。
+	 *
+	 * 依次读取 WPML、Polylang，并允许第三方通过 veloca_language_urls 过滤注入。
+	 * 子域 / 目录 / 查询参数三种语言模式都由此接口归一化。
+	 *
+	 * @return array 语言代码 => 语言首页 URL。
+	 */
+	public static function language_urls() {
+		static $cached = null;
+		if ( null !== $cached ) {
+			return $cached;
+		}
+
+		$urls = array();
+
+		// WPML：skip_missing=0 保证未翻译的语言也进入列表。
+		if ( function_exists( 'icl_get_languages' ) ) {
+			foreach ( (array) icl_get_languages( 'skip_missing=0' ) as $code => $language ) {
+				if ( is_array( $language ) && ! empty( $language['url'] ) ) {
+					$urls[ (string) ( isset( $language['language_code'] ) ? $language['language_code'] : $code ) ] = (string) $language['url'];
+				}
+			}
+		}
+
+		// Polylang：语言代码与首页分别由两个官方函数提供。
+		if ( function_exists( 'pll_languages_list' ) && function_exists( 'pll_home_url' ) ) {
+			foreach ( (array) pll_languages_list( array( 'fields' => 'slug' ) ) as $code ) {
+				$code = (string) $code;
+				$url  = pll_home_url( $code );
+				if ( $code && is_string( $url ) && '' !== $url ) {
+					$urls[ $code ] = $url;
+				}
+			}
+		}
+
+		/**
+		 * 过滤语言首页列表：第三方多语言插件可在此注入。
+		 *
+		 * @param array $urls 语言代码 => 首页 URL。
+		 */
+		$urls = apply_filters( 'veloca_language_urls', $urls );
+
+		$clean = array();
+		if ( is_array( $urls ) ) {
+			foreach ( $urls as $code => $url ) {
+				$code = sanitize_key( (string) $code );
+				$url  = is_string( $url ) ? trim( $url ) : '';
+				$parts = $url ? wp_parse_url( $url ) : false;
+				if ( '' === $code || ! is_array( $parts ) || empty( $parts['host'] ) || ! in_array( isset( $parts['scheme'] ) ? $parts['scheme'] : '', array( 'http', 'https' ), true ) ) {
+					continue;
+				}
+				$clean[ $code ] = $url;
+			}
+		}
+
+		$cached = $clean;
+		return $cached;
+	}
+
+	/**
+	 * 把主站 URL 定位到指定语言，供缓存键与关联清除共用。
+	 *
+	 * @param string $url       主站 URL。
+	 * @param string $language  目标语言代码。
+	 * @param array  $languages 可选的语言首页列表。
+	 * @return string 目标语言 URL，无法定位时返回原 URL。
+	 */
+	public static function localize_url( $url, $language, $languages = null ) {
+		$url = (string) $url;
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$filtered = apply_filters( 'wpml_permalink', $url, $language );
+		if ( is_string( $filtered ) && '' !== $filtered && $filtered !== $url ) {
+			return $filtered;
+		}
+
+		$languages = null === $languages ? self::language_urls() : (array) $languages;
+		if ( ! isset( $languages[ $language ] ) ) {
+			return $url;
+		}
+
+		$target = wp_parse_url( $languages[ $language ] );
+		$source = wp_parse_url( $url );
+		$home   = wp_parse_url( home_url( '/' ) );
+		if ( ! is_array( $target ) || ! is_array( $source ) || ! is_array( $home ) || empty( $target['host'] ) || empty( $source['host'] ) ) {
+			return $url;
+		}
+
+		$scheme = isset( $target['scheme'] ) ? $target['scheme'] : ( isset( $source['scheme'] ) ? $source['scheme'] : 'https' );
+		$host   = $target['host'];
+		$port   = isset( $target['port'] ) ? ':' . $target['port'] : '';
+		$path   = isset( $source['path'] ) ? $source['path'] : '/';
+
+		// 目录模式：语言首页路径是 /de/ 这类前缀，拼到原文路径前。
+		$home_path = isset( $home['path'] ) ? rtrim( $home['path'], '/' ) : '';
+		$lang_path = isset( $target['path'] ) ? rtrim( $target['path'], '/' ) : '';
+		if ( '' !== $lang_path && '' !== $home_path && 0 === strpos( $lang_path, $home_path ) ) {
+			$lang_path = substr( $lang_path, strlen( $home_path ) );
+		}
+		if ( '' !== $lang_path && '/' !== $lang_path && 0 !== strpos( $path, $lang_path . '/' ) ) {
+			$path = $lang_path . ( '/' === $path ? '/' : $path );
+		}
+
+		// 查询参数模式：语言首页带 ?lang=xx 时把参数并到目标 URL。
+		$query = isset( $source['query'] ) ? $source['query'] : '';
+		if ( ! empty( $target['query'] ) ) {
+			$query = '' === $query ? $target['query'] : $query . '&' . $target['query'];
+		}
+
+		$out = $scheme . '://' . $host . $port . $path;
+		if ( '' !== $query ) {
+			$out .= '?' . $query;
+		}
+		if ( isset( $source['fragment'] ) && '' !== $source['fragment'] ) {
+			$out .= '#' . $source['fragment'];
+		}
+
+		return $out;
+	}
+
+	/**
+	 * 本站允许的主机：主站加上所有语言域名（多域模式下子域也属于本站）。
 	 *
 	 * @return array 小写主机名列表。
 	 */
@@ -431,18 +554,10 @@ final class VELOCA_Tools {
 			$hosts[] = strtolower( $home['host'] );
 		}
 
-		if ( function_exists( 'icl_get_languages' ) ) {
-			$languages = icl_get_languages( 'skip_missing=0' );
-			if ( is_array( $languages ) ) {
-				foreach ( $languages as $language ) {
-					if ( empty( $language['url'] ) ) {
-						continue;
-					}
-					$parts = wp_parse_url( $language['url'] );
-					if ( is_array( $parts ) && ! empty( $parts['host'] ) ) {
-						$hosts[] = strtolower( $parts['host'] );
-					}
-				}
+		foreach ( self::language_urls() as $url ) {
+			$parts = wp_parse_url( $url );
+			if ( is_array( $parts ) && ! empty( $parts['host'] ) ) {
+				$hosts[] = strtolower( $parts['host'] );
 			}
 		}
 

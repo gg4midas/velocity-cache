@@ -4,7 +4,7 @@ Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.1
+Stable tag: 1.5.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,11 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 
 == Changelog ==
 
+= 1.5.2 =
+* Made multilingual support generic: language discovery now covers WPML, Polylang and third-party plugins through a filter, with no fixed set or maximum number of languages.
+* Cache keys, related purges and preloading now follow each language homepage for subdomain, directory and query-string language setups.
+* Added a translatable POT file and Simplified Chinese translation; the settings screen now follows the WordPress admin locale instead of always showing one language.
+
 = 1.5.1 =
 * Fixed selective cache purge for WPML: translations sharing a trid now have their own language-domain URLs cleared when the source post changes.
 * Page cache keys and the preloader now recognize all WPML language domains in multi-domain setups, and preloading covers every language homepage.
@@ -126,6 +131,9 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 * Isolated logged-in cache keys and improved cache directory safeguards.
 
 == Upgrade Notice ==
+
+= 1.5.2 =
+Recommended for all multilingual sites. Purge the cache once after upgrading so translated pages are rebuilt with the generic language handling.
 
 = 1.5.1 =
 Recommended for WPML sites using language subdomains. Purges the cache once after upgrading to rebuild translated page caches.

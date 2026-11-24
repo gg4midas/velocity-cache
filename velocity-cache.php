@@ -3,7 +3,7 @@
  * Plugin Name:       Velocity Cache
  * Plugin URI:        https://github.com/gg4midas/velocity-cache
  * Description:       Lightweight caching and performance plugin: page cache, HTML/CSS/JS minification, CSS combination, preloading, and cache purging.
- * Version:           1.5.1
+ * Version:           1.5.2
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            gg4midas
@@ -18,7 +18,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'VELOCA_VERSION', '1.5.1' );
+define( 'VELOCA_VERSION', '1.5.2' );
 define( 'VELOCA_FILE', __FILE__ );
 define( 'VELOCA_PATH', plugin_dir_path( __FILE__ ) );
 define( 'VELOCA_URL', plugin_dir_url( __FILE__ ) );
@@ -31,7 +31,7 @@ if ( PHP_VERSION_ID < 70400 ) {
 			if ( 'plugins.php' !== $pagenow ) {
 				return;
 			}
-			echo '<div class="notice notice-error"><p>' . esc_html__( 'Velocity Cache 需要 PHP 7.4 或更高版本，插件已停止加载。', 'velocity-cache' ) . '</p></div>';
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Velocity Cache requires PHP 7.4 or higher; the plugin has stopped loading.', 'velocity-cache' ) . '</p></div>';
 		}
 	);
 	return;

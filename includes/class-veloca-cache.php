@@ -426,9 +426,9 @@ final class VELOCA_Cache {
 		if ( in_array( $hook, array( 'activated_plugin', 'deactivated_plugin' ), true ) ) {
 			$result = self::purge_all( false );
 			if ( ! is_wp_error( $result ) ) {
-				$action = 'activated_plugin' === $hook ? __( '启用', 'velocity-cache' ) : __( '停用', 'velocity-cache' );
-				/* translators: %s: activated or deactivated. */
-				set_transient( 'veloca_plugin_notice', sprintf( __( 'Velocity Cache 已因插件%s刷新页面缓存。', 'velocity-cache' ), $action ), 300 );
+				$action = 'activated_plugin' === $hook ? __( 'activation', 'velocity-cache' ) : __( 'deactivation', 'velocity-cache' );
+				/* translators: %s: activation or deactivation. */
+				set_transient( 'veloca_plugin_notice', sprintf( __( 'Velocity Cache refreshed the page cache after a plugin %s.', 'velocity-cache' ), $action ), 300 );
 			}
 			return;
 		}
@@ -491,8 +491,8 @@ final class VELOCA_Cache {
 			$links[] = get_month_link( gmdate( 'Y', $time ), gmdate( 'm', $time ) );
 			$links[] = get_day_link( gmdate( 'Y', $time ), gmdate( 'm', $time ), gmdate( 'd', $time ) );
 
-			// WPML：同 trid 的译文在子域下各自持有独立缓存，必须一并清理。
-			$links = array_merge( $links, self::wpml_sibling_links( $post ) );
+			// 多语言：每种语言域名下的译文与归档都持有独立缓存，必须一并清理。
+			$links = array_merge( $links, self::multilingual_sibling_links( $post ) );
 		}
 
 		$purged = 0;
@@ -507,68 +507,103 @@ final class VELOCA_Cache {
 	}
 
 	/**
-	 * 找出 WPML 同一 trid 下所有译文的本地 URL，包含各语言首页与归档。
+	 * 找出每种语言下该文章的译文与归档 URL。
+	 *
+	 * 语言列表来自 VELOCA_Tools::language_urls()（WPML / Polylang / 第三方过滤），
+	 * 译文 ID 通过 veloca_post_translations 过滤或 WPML trid / Polylang 官方函数取得，
+	 * 不预设语言代码，也不限制语言数量。
 	 *
 	 * @param WP_Post $post 当前文章。
 	 * @return array 待清理的 URL 列表。
 	 */
-	private static function wpml_sibling_links( $post ) {
-		$links = array();
-		if ( ! $post || ! function_exists( 'icl_get_languages' ) ) {
+	private static function multilingual_sibling_links( $post ) {
+		$links     = array();
+		$languages = VELOCA_Tools::language_urls();
+		if ( ! $post || empty( $languages ) ) {
 			return $links;
+		}
+
+		// 语言代码 => 译文文章 ID。第三方可用过滤器接入自定义多语言插件。
+		$translations = array();
+		if ( function_exists( 'pll_get_post_translations' ) ) {
+			foreach ( (array) pll_get_post_translations( $post->ID ) as $code => $id ) {
+				$translations[ sanitize_key( (string) $code ) ] = (int) $id;
+			}
 		}
 
 		global $wpdb;
 		$table = $wpdb->prefix . 'icl_translations';
-		$row   = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT trid FROM {$table} WHERE element_id = %d AND element_type = %s LIMIT 1",
-				$post->ID,
-				'post_' . $post->post_type
-			)
-		);
-		if ( ! $row || ! isset( $row->trid ) ) {
-			return $links;
-		}
-
-		$rows      = $wpdb->get_results( $wpdb->prepare( "SELECT element_id, language_code FROM {$table} WHERE trid = %d", $row->trid ) );
-		$languages = (array) icl_get_languages( 'skip_missing=0' );
-		if ( ! is_array( $rows ) ) {
-			return $links;
-		}
-
-		foreach ( $rows as $item ) {
-			$element_id = (int) $item->element_id;
-			$language   = (string) $item->language_code;
-			if ( $element_id < 1 ) {
-				continue;
-			}
-
-			// get_permalink() 在后台上下文总是返回当前语言域名，需要用 WPML 过滤器换到译文语言。
-			$url = get_permalink( $element_id );
-			if ( $url ) {
-				$links[] = apply_filters( 'wpml_permalink', $url, $language );
-			}
-
-			if ( isset( $languages[ $language ] ) && ! empty( $languages[ $language ]['url'] ) ) {
-				$links[] = $languages[ $language ]['url'];
-			}
-
-			$archive = get_post_type_archive_link( $post->post_type );
-			if ( $archive ) {
-				$links[] = apply_filters( 'wpml_permalink', $archive, $language );
-			}
-
-			foreach ( get_object_taxonomies( $post ) as $taxonomy ) {
-				$terms = get_the_terms( $element_id, $taxonomy );
-				if ( ! is_array( $terms ) ) {
-					continue;
+		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) === $table ) {
+			$trid = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT trid FROM {$table} WHERE element_id = %d AND element_type = %s LIMIT 1",
+					$post->ID,
+					'post_' . $post->post_type
+				)
+			);
+			if ( $trid ) {
+				$rows = $wpdb->get_results( $wpdb->prepare( "SELECT element_id, language_code FROM {$table} WHERE trid = %d", $trid ) );
+				foreach ( (array) $rows as $item ) {
+					$translations[ sanitize_key( (string) $item->language_code ) ] = (int) $item->element_id;
 				}
-				foreach ( $terms as $term ) {
-					$term_link = get_term_link( $term );
-					if ( ! is_wp_error( $term_link ) ) {
-						$links[] = apply_filters( 'wpml_permalink', $term_link, $language );
+			}
+		}
+
+		/**
+		 * 过滤译文映射：语言代码 => 文章 ID。
+		 *
+		 * @param array   $translations 已识别的译文。
+		 * @param WP_Post $post         当前文章。
+		 */
+		$translations = apply_filters( 'veloca_post_translations', $translations, $post );
+		if ( ! is_array( $translations ) ) {
+			$translations = array();
+		}
+
+		// 经验证的文章 ID，避免第三方过滤器返回无效值。
+		$valid_ids = array();
+		foreach ( $translations as $code => $id ) {
+			$id = (int) $id;
+			if ( $id > 0 && get_post_type( $id ) === $post->post_type ) {
+				$valid_ids[ sanitize_key( (string) $code ) ] = $id;
+			}
+		}
+
+		$archive = get_post_type_archive_link( $post->post_type );
+		$source  = get_permalink( $post->ID );
+
+		foreach ( $languages as $code => $home_url ) {
+			$links[] = rtrim( $home_url, '/' ) . '/';
+			if ( $source ) {
+				$links[] = VELOCA_Tools::localize_url( $source, $code, $languages );
+			}
+			if ( isset( $valid_ids[ $code ] ) ) {
+				$translated_url = get_permalink( $valid_ids[ $code ] );
+				if ( $translated_url ) {
+					$links[] = VELOCA_Tools::localize_url( $translated_url, $code, $languages );
+				}
+			}
+			if ( $archive ) {
+				$links[] = VELOCA_Tools::localize_url( $archive, $code, $languages );
+			}
+
+			// 分类归档：取当前文章与译文文章上的全部 term，按语言定位。
+			$term_ids = array();
+			foreach ( array_unique( array_filter( array( $post->ID, isset( $valid_ids[ $code ] ) ? $valid_ids[ $code ] : 0 ) ) ) as $pid ) {
+				foreach ( get_object_taxonomies( $post ) as $taxonomy ) {
+					$terms = get_the_terms( $pid, $taxonomy );
+					if ( ! is_array( $terms ) ) {
+						continue;
 					}
+					foreach ( $terms as $term ) {
+						$term_ids[ (int) $term->term_id ] = $term;
+					}
+				}
+			}
+			foreach ( $term_ids as $term ) {
+				$term_link = get_term_link( $term );
+				if ( ! is_wp_error( $term_link ) && $term_link ) {
+					$links[] = VELOCA_Tools::localize_url( $term_link, $code, $languages );
 				}
 			}
 		}
@@ -591,7 +626,7 @@ final class VELOCA_Cache {
 		$bar->add_node(
 			array(
 				'id'    => 'veloca-purge-cache',
-				'title' => esc_html__( '清理页面缓存', 'velocity-cache' ),
+				'title' => esc_html__( 'Purge Page Cache', 'velocity-cache' ),
 				'href'  => $url,
 			)
 		);

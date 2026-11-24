@@ -191,13 +191,9 @@ final class VELOCA_Preloader {
 			}
 		}
 
-		// 多域 WPML 的各语言子域不在主站 sitemap 里，显式加入首页保证预加载覆盖。
-		if ( function_exists( 'icl_get_languages' ) ) {
-			foreach ( (array) icl_get_languages( 'skip_missing=0' ) as $language ) {
-				if ( ! empty( $language['url'] ) ) {
-					$urls[] = rtrim( $language['url'], '/' ) . '/';
-				}
-			}
+		// 各语言首页（无论子域/目录/参数模式）不在主站 sitemap 里，显式加入保证预加载覆盖。
+		foreach ( VELOCA_Tools::language_urls() as $home_url ) {
+			$urls[] = rtrim( $home_url, '/' ) . '/';
 		}
 
 		return $urls;
