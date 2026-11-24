@@ -7,7 +7,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-final class VC_Admin {
+final class VELOCA_Admin {
 
 	/** @var string */
 	private $page_hook = '';
@@ -17,12 +17,12 @@ final class VC_Admin {
 	 */
 	public function init() {
 		add_action( 'admin_menu', array( $this, 'add_page' ) );
-		add_action( 'init', array( 'VC_Settings', 'register' ) );
+		add_action( 'init', array( 'VELOCA_Settings', 'register' ) );
 		add_action( 'admin_init', array( $this, 'register_fields' ) );
-		add_filter( 'plugin_action_links_' . plugin_basename( VC_FILE ), array( $this, 'plugin_action_links' ) );
-		add_action( 'admin_post_vc_purge_cache', array( $this, 'handle_purge' ) );
-		add_action( 'admin_post_vc_bump_version', array( $this, 'handle_bump' ) );
-		add_action( 'admin_post_vc_preload', array( $this, 'handle_preload' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( VELOCA_FILE ), array( $this, 'plugin_action_links' ) );
+		add_action( 'admin_post_veloca_purge_cache', array( $this, 'handle_purge' ) );
+		add_action( 'admin_post_veloca_bump_version', array( $this, 'handle_bump' ) );
+		add_action( 'admin_post_veloca_preload', array( $this, 'handle_preload' ) );
 		add_action( 'admin_notices', array( $this, 'notices' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 	}
@@ -35,7 +35,7 @@ final class VC_Admin {
 			__( 'Velocity Cache', 'velocity-cache' ),
 			__( 'Velocity Cache', 'velocity-cache' ),
 			'manage_options',
-			VC_Settings::PAGE,
+			VELOCA_Settings::PAGE,
 			array( $this, 'render_page' )
 		);
 	}
@@ -51,7 +51,7 @@ final class VC_Admin {
 			return $links;
 		}
 
-		$url = admin_url( 'options-general.php?page=' . VC_Settings::PAGE );
+		$url = admin_url( 'options-general.php?page=' . VELOCA_Settings::PAGE );
 		array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( '设置', 'velocity-cache' ) . '</a>' );
 
 		return $links;
@@ -65,12 +65,12 @@ final class VC_Admin {
 			wp_die( esc_html__( '你没有权限访问此页面。', 'velocity-cache' ), '', array( 'response' => 403 ) );
 		}
 
-		VC_Tools::ensure_dirs();
+		VELOCA_Tools::ensure_dirs();
 
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 		$status   = $this->status_rows();
 
-		include VC_PATH . 'admin/views/settings-page.php';
+		include VELOCA_PATH . 'admin/views/settings-page.php';
 	}
 
 	/**
@@ -78,20 +78,20 @@ final class VC_Admin {
 	 */
 	public function register_fields() {
 		add_settings_section(
-			'vc_section_cache',
+			'veloca_section_cache',
 			__( '缓存', 'velocity-cache' ),
 			static function () {
 				echo '<p class="description">' . esc_html__( '仅缓存匿名访客的 GET 请求；动态页面与排除规则中的地址不会缓存。', 'velocity-cache' ) . '</p>';
 			},
-			VC_Settings::PAGE
+			VELOCA_Settings::PAGE
 		);
 
 		add_settings_field(
 			'enable_cache',
 			__( '页面缓存', 'velocity-cache' ),
 			array( $this, 'checkbox_field' ),
-			VC_Settings::PAGE,
-			'vc_section_cache',
+			VELOCA_Settings::PAGE,
+			'veloca_section_cache',
 			array( 'key' => 'enable_cache', 'desc' => __( '生成静态 HTML，命中后直接输出，不加载主题。', 'velocity-cache' ) )
 		);
 
@@ -99,8 +99,8 @@ final class VC_Admin {
 			'cache_ttl',
 			__( '缓存有效期（秒）', 'velocity-cache' ),
 			array( $this, 'number_field' ),
-			VC_Settings::PAGE,
-			'vc_section_cache',
+			VELOCA_Settings::PAGE,
+			'veloca_section_cache',
 			array( 'key' => 'cache_ttl', 'desc' => __( '0 表示永不过期，仅在内容变化时刷新。最大 2592000 秒。', 'velocity-cache' ) )
 		);
 
@@ -108,8 +108,8 @@ final class VC_Admin {
 			'cache_logged_in',
 			__( '缓存已登录用户', 'velocity-cache' ),
 			array( $this, 'checkbox_field' ),
-			VC_Settings::PAGE,
-			'vc_section_cache',
+			VELOCA_Settings::PAGE,
+			'veloca_section_cache',
 			array( 'key' => 'cache_logged_in', 'desc' => __( '按用户 ID 隔离缓存；还需移除登录 Cookie 排除规则。个性化页面请谨慎开启。', 'velocity-cache' ) )
 		);
 
@@ -117,8 +117,8 @@ final class VC_Admin {
 			'cache_query',
 			__( '缓存带查询参数的 URL', 'velocity-cache' ),
 			array( $this, 'checkbox_field' ),
-			VC_Settings::PAGE,
-			'vc_section_cache',
+			VELOCA_Settings::PAGE,
+			'veloca_section_cache',
 			array( 'key' => 'cache_query', 'desc' => __( '默认关闭，避免 ?utm_ 等参数产生大量重复缓存。', 'velocity-cache' ) )
 		);
 
@@ -129,35 +129,35 @@ final class VC_Admin {
 				'enable_compression'     => array( __( 'Brotli / Gzip 预压缩', 'velocity-cache' ), __( '生成 .br/.gz 缓存变体并按 Accept-Encoding 投递；扩展不可用时只生成可用格式。', 'velocity-cache' ) ),
 			) as $key => $labels
 		) {
-			add_settings_field( $key, $labels[0], array( $this, 'checkbox_field' ), VC_Settings::PAGE, 'vc_section_cache', array( 'key' => $key, 'desc' => $labels[1] ) );
+			add_settings_field( $key, $labels[0], array( $this, 'checkbox_field' ), VELOCA_Settings::PAGE, 'veloca_section_cache', array( 'key' => $key, 'desc' => $labels[1] ) );
 		}
 
 		add_settings_section(
-			'vc_section_preload',
+			'veloca_section_preload',
 			__( '缓存预加载', 'velocity-cache' ),
 			static function () {
 				echo '<p class="description">' . esc_html__( '手动预加载可使用自定义 URL 或自动读取站点地图；自动预加载会在全量清理后后台建队。', 'velocity-cache' ) . '</p>';
 			},
-			VC_Settings::PAGE
+			VELOCA_Settings::PAGE
 		);
-		add_settings_field( 'enable_preload', __( '自动预加载', 'velocity-cache' ), array( $this, 'checkbox_field' ), VC_Settings::PAGE, 'vc_section_preload', array( 'key' => 'enable_preload', 'desc' => __( '全量清理后通过 WP-Cron 分批预加载，每批 5 个 URL，最多 200 个。', 'velocity-cache' ) ) );
-		add_settings_field( 'preload_urls', __( '预加载 URL', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_preload', array( 'key' => 'preload_urls', 'desc' => __( '每行一个完整站内 URL。留空则读取 wp-sitemap.xml 或 sitemap_index.xml，并始终包含首页。', 'velocity-cache' ) ) );
+		add_settings_field( 'enable_preload', __( '自动预加载', 'velocity-cache' ), array( $this, 'checkbox_field' ), VELOCA_Settings::PAGE, 'veloca_section_preload', array( 'key' => 'enable_preload', 'desc' => __( '全量清理后通过 WP-Cron 分批预加载，每批 5 个 URL，最多 200 个。', 'velocity-cache' ) ) );
+		add_settings_field( 'preload_urls', __( '预加载 URL', 'velocity-cache' ), array( $this, 'textarea_field' ), VELOCA_Settings::PAGE, 'veloca_section_preload', array( 'key' => 'preload_urls', 'desc' => __( '每行一个完整站内 URL。留空则读取 wp-sitemap.xml 或 sitemap_index.xml，并始终包含首页。', 'velocity-cache' ) ) );
 
 		add_settings_section(
-			'vc_section_minify',
+			'veloca_section_minify',
 			__( '资源优化', 'velocity-cache' ),
 			static function () {
 				echo '<p class="description">' . esc_html__( '站外资源、module 脚本、async/defer 脚本与包含 @import 的样式表会被自动跳过。', 'velocity-cache' ) . '</p>';
 			},
-			VC_Settings::PAGE
+			VELOCA_Settings::PAGE
 		);
 
 		add_settings_field(
 			'enable_html_minify',
 			__( 'HTML 压缩', 'velocity-cache' ),
 			array( $this, 'checkbox_field' ),
-			VC_Settings::PAGE,
-			'vc_section_minify',
+			VELOCA_Settings::PAGE,
+			'veloca_section_minify',
 			array( 'key' => 'enable_html_minify', 'desc' => __( '移除注释与多余空白，保留 pre/textarea/script/style。', 'velocity-cache' ) )
 		);
 
@@ -165,8 +165,8 @@ final class VC_Admin {
 			'enable_css_minify',
 			__( 'CSS 压缩', 'velocity-cache' ),
 			array( $this, 'checkbox_field' ),
-			VC_Settings::PAGE,
-			'vc_section_minify',
+			VELOCA_Settings::PAGE,
+			'veloca_section_minify',
 			array( 'key' => 'enable_css_minify', 'desc' => __( '压缩本地样式表与内联 style。', 'velocity-cache' ) )
 		);
 
@@ -174,8 +174,8 @@ final class VC_Admin {
 			'enable_css_combine',
 			__( 'CSS 合并', 'velocity-cache' ),
 			array( $this, 'checkbox_field' ),
-			VC_Settings::PAGE,
-			'vc_section_minify',
+			VELOCA_Settings::PAGE,
+			'veloca_section_minify',
 			array( 'key' => 'enable_css_combine', 'desc' => __( '按 media 属性把本地样式表合并为一个版本化文件。', 'velocity-cache' ) )
 		);
 
@@ -183,18 +183,18 @@ final class VC_Admin {
 			'enable_js_minify',
 			__( 'JavaScript 压缩', 'velocity-cache' ),
 			array( $this, 'checkbox_field' ),
-			VC_Settings::PAGE,
-			'vc_section_minify',
+			VELOCA_Settings::PAGE,
+			'veloca_section_minify',
 			array( 'key' => 'enable_js_minify', 'desc' => __( '压缩本地脚本与内联脚本，跳过 module/async/defer。', 'velocity-cache' ) )
 		);
 
 		add_settings_section(
-			'vc_section_loading',
+			'veloca_section_loading',
 			__( '加载优化', 'velocity-cache' ),
 			static function () {
 				echo '<p class="description">' . esc_html__( 'LazyLoad 使用浏览器原生能力；Defer 与 Delay JS 可能改变脚本时序，请逐站测试。', 'velocity-cache' ) . '</p>';
 			},
-			VC_Settings::PAGE
+			VELOCA_Settings::PAGE
 		);
 		foreach (
 			array(
@@ -208,22 +208,22 @@ final class VC_Admin {
 				'enable_cdn'       => array( __( 'CDN 地址重写', 'velocity-cache' ), __( '仅重写本地静态资源的 src/href，不改页面链接、srcset 或动态端点。', 'velocity-cache' ) ),
 			) as $key => $labels
 		) {
-			add_settings_field( $key, $labels[0], array( $this, 'checkbox_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => $key, 'desc' => $labels[1] ) );
+			add_settings_field( $key, $labels[0], array( $this, 'checkbox_field' ), VELOCA_Settings::PAGE, 'veloca_section_loading', array( 'key' => $key, 'desc' => $labels[1] ) );
 		}
-		add_settings_field( 'lazyload_skip', __( '首屏图片跳过数', 'velocity-cache' ), array( $this, 'number_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'lazyload_skip', 'desc' => __( '前 N 张图片不延迟，默认 2，最大 20。', 'velocity-cache' ) ) );
-		add_settings_field( 'delay_js_handles', __( 'Delay JS 规则', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'delay_js_handles', 'desc' => __( '每行一条 handle 或 URL 规则，支持 * 与 ?；留空时不会延迟任何脚本。', 'velocity-cache' ) ) );
-		add_settings_field( 'async_css_excludes', __( 'CSS 异步排除', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'async_css_excludes', 'desc' => __( '默认排除 astra-theme-css；每行一个 handle 或 URL 规则，核心布局样式必须保留阻塞加载。', 'velocity-cache' ) ) );
-		add_settings_field( 'conditional_css_rules', __( 'CSS 条件卸载规则', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'conditional_css_rules', 'desc' => __( '每行：handle | 标记1, 标记2。页面 DOM 含任一标记则保留该样式表，否则移除；标记不区分大小写，判断时忽略 script/style 内容。', 'velocity-cache' ) ) );
-		add_settings_field( 'critical_css', __( '关键 CSS', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'critical_css', 'desc' => __( '可选。填写首屏关键 CSS，会注入 head；不要包含 style 标签。', 'velocity-cache' ) ) );
-		add_settings_field( 'cdn_url', __( 'CDN URL', 'velocity-cache' ), array( $this, 'text_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'cdn_url', 'desc' => __( '例如 https://cdn.example.com，对应原站根路径并保留 wp-content/wp-includes 目录。', 'velocity-cache' ) ) );
+		add_settings_field( 'lazyload_skip', __( '首屏图片跳过数', 'velocity-cache' ), array( $this, 'number_field' ), VELOCA_Settings::PAGE, 'veloca_section_loading', array( 'key' => 'lazyload_skip', 'desc' => __( '前 N 张图片不延迟，默认 2，最大 20。', 'velocity-cache' ) ) );
+		add_settings_field( 'delay_js_handles', __( 'Delay JS 规则', 'velocity-cache' ), array( $this, 'textarea_field' ), VELOCA_Settings::PAGE, 'veloca_section_loading', array( 'key' => 'delay_js_handles', 'desc' => __( '每行一条 handle 或 URL 规则，支持 * 与 ?；留空时不会延迟任何脚本。', 'velocity-cache' ) ) );
+		add_settings_field( 'async_css_excludes', __( 'CSS 异步排除', 'velocity-cache' ), array( $this, 'textarea_field' ), VELOCA_Settings::PAGE, 'veloca_section_loading', array( 'key' => 'async_css_excludes', 'desc' => __( '默认排除 astra-theme-css；每行一个 handle 或 URL 规则，核心布局样式必须保留阻塞加载。', 'velocity-cache' ) ) );
+		add_settings_field( 'conditional_css_rules', __( 'CSS 条件卸载规则', 'velocity-cache' ), array( $this, 'textarea_field' ), VELOCA_Settings::PAGE, 'veloca_section_loading', array( 'key' => 'conditional_css_rules', 'desc' => __( '每行：handle | 标记1, 标记2。页面 DOM 含任一标记则保留该样式表，否则移除；标记不区分大小写，判断时忽略 script/style 内容。', 'velocity-cache' ) ) );
+		add_settings_field( 'critical_css', __( '关键 CSS', 'velocity-cache' ), array( $this, 'textarea_field' ), VELOCA_Settings::PAGE, 'veloca_section_loading', array( 'key' => 'critical_css', 'desc' => __( '可选。填写首屏关键 CSS，会注入 head；不要包含 style 标签。', 'velocity-cache' ) ) );
+		add_settings_field( 'cdn_url', __( 'CDN URL', 'velocity-cache' ), array( $this, 'text_field' ), VELOCA_Settings::PAGE, 'veloca_section_loading', array( 'key' => 'cdn_url', 'desc' => __( '例如 https://cdn.example.com，对应原站根路径并保留 wp-content/wp-includes 目录。', 'velocity-cache' ) ) );
 
 		add_settings_section(
-			'vc_section_rules',
+			'veloca_section_rules',
 			__( '排除规则', 'velocity-cache' ),
 			static function () {
 				echo '<p class="description">' . esc_html__( '每行一条，支持 * 与 ? 通配符。CSS/JS 规则可写 handle 名或 URL 关键词。', 'velocity-cache' ) . '</p>';
 			},
-			VC_Settings::PAGE
+			VELOCA_Settings::PAGE
 		);
 
 		$textareas = array(
@@ -238,27 +238,27 @@ final class VC_Admin {
 				$key,
 				$labels[0],
 				array( $this, 'textarea_field' ),
-				VC_Settings::PAGE,
-				'vc_section_rules',
+				VELOCA_Settings::PAGE,
+				'veloca_section_rules',
 				array( 'key' => $key, 'desc' => $labels[1] )
 			);
 		}
 
 		add_settings_section(
-			'vc_section_log',
+			'veloca_section_log',
 			__( '错误处理', 'velocity-cache' ),
 			static function () {
 				echo '<p class="description">' . esc_html__( '日志写入 wp-content/cache/velocity-cache/logs/errors.log，超过 1 MB 自动轮转。', 'velocity-cache' ) . '</p>';
 			},
-			VC_Settings::PAGE
+			VELOCA_Settings::PAGE
 		);
 
 		add_settings_field(
 			'log_errors',
 			__( '记录错误', 'velocity-cache' ),
 			array( $this, 'checkbox_field' ),
-			VC_Settings::PAGE,
-			'vc_section_log',
+			VELOCA_Settings::PAGE,
+			'veloca_section_log',
 			array( 'key' => 'log_errors', 'desc' => __( '记录缓存写入失败与优化异常，便于排查。', 'velocity-cache' ) )
 		);
 	}
@@ -269,11 +269,11 @@ final class VC_Admin {
 	 * @param array $args 字段参数。
 	 */
 	public function checkbox_field( $args ) {
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 		$key      = $args['key'];
 		printf(
 			'<label><input type="checkbox" name="%1$s[%2$s]" value="1" %3$s> %4$s</label>',
-			esc_attr( VC_Settings::OPTION ),
+			esc_attr( VELOCA_Settings::OPTION ),
 			esc_attr( $key ),
 			checked( 1, (int) $settings[ $key ], false ),
 			esc_html( __( '启用', 'velocity-cache' ) )
@@ -290,12 +290,12 @@ final class VC_Admin {
 	 * @param array $args 字段参数。
 	 */
 	public function number_field( $args ) {
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 		$key      = $args['key'];
 		$max      = 'lazyload_skip' === $key ? 20 : 2592000;
 		printf(
 			'<input type="number" min="0" max="%4$d" step="1" name="%1$s[%2$s]" value="%3$d" class="small-text">',
-			esc_attr( VC_Settings::OPTION ),
+			esc_attr( VELOCA_Settings::OPTION ),
 			esc_attr( $key ),
 			(int) $settings[ $key ],
 			(int) $max
@@ -312,11 +312,11 @@ final class VC_Admin {
 	 * @param array $args 字段参数。
 	 */
 	public function text_field( $args ) {
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 		$key      = $args['key'];
 		printf(
 			'<input type="url" name="%1$s[%2$s]" value="%3$s" class="regular-text" placeholder="https://cdn.example.com">',
-			esc_attr( VC_Settings::OPTION ),
+			esc_attr( VELOCA_Settings::OPTION ),
 			esc_attr( $key ),
 			esc_attr( $settings[ $key ] )
 		);
@@ -331,11 +331,11 @@ final class VC_Admin {
 	 * @param array $args 字段参数。
 	 */
 	public function textarea_field( $args ) {
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 		$key      = $args['key'];
 		printf(
 			'<textarea name="%1$s[%2$s]" rows="4" cols="60" class="large-text code">%3$s</textarea>',
-			esc_attr( VC_Settings::OPTION ),
+			esc_attr( VELOCA_Settings::OPTION ),
 			esc_attr( $key ),
 			esc_textarea( $settings[ $key ] )
 		);
@@ -353,10 +353,10 @@ final class VC_Admin {
 			wp_die( esc_html__( '你没有权限执行此操作。', 'velocity-cache' ), '', array( 'response' => 403 ) );
 		}
 
-		check_admin_referer( 'vc_purge_cache' );
+		check_admin_referer( 'veloca_purge_cache' );
 
 		$scope  = isset( $_REQUEST['scope'] ) ? sanitize_key( wp_unslash( $_REQUEST['scope'] ) ) : 'pages';
-		$result = VC_Cache::purge_all( 'assets' === $scope );
+		$result = VELOCA_Cache::purge_all( 'assets' === $scope );
 
 		$this->set_notice( $result, __( '缓存已清理。', 'velocity-cache' ) );
 		$this->redirect_back();
@@ -370,9 +370,9 @@ final class VC_Admin {
 			wp_die( esc_html__( '你没有权限执行此操作。', 'velocity-cache' ), '', array( 'response' => 403 ) );
 		}
 
-		check_admin_referer( 'vc_bump_version' );
+		check_admin_referer( 'veloca_bump_version' );
 
-		$result = VC_Cache::bump_version();
+		$result = VELOCA_Cache::bump_version();
 		$this->set_notice( $result, __( '资源版本号已递增，缓存已清理。', 'velocity-cache' ) );
 		$this->redirect_back();
 	}
@@ -384,9 +384,9 @@ final class VC_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( '你没有权限执行此操作。', 'velocity-cache' ), '', array( 'response' => 403 ) );
 		}
-		check_admin_referer( 'vc_preload' );
+		check_admin_referer( 'veloca_preload' );
 
-		$result = VC_Preloader::schedule();
+		$result = VELOCA_Preloader::schedule();
 		if ( is_wp_error( $result ) ) {
 			$this->set_notice( $result, '' );
 		} else {
@@ -407,22 +407,22 @@ final class VC_Admin {
 	 */
 	private function set_notice( $result, $message ) {
 		if ( is_wp_error( $result ) ) {
-			VC_Tools::log( 'admin action failed', array( 'error' => $result->get_error_message() ) );
+			VELOCA_Tools::log( 'admin action failed', array( 'error' => $result->get_error_message() ) );
 			$notice = array( 'type' => 'error', 'message' => $result->get_error_message() );
 		} else {
 			$notice = array( 'type' => 'success', 'message' => $message );
 		}
 
-		set_transient( 'vc_admin_notice', $notice, 120 );
+		set_transient( 'veloca_admin_notice', $notice, 120 );
 	}
 
 	/**
 	 * 安全跳回设置页。
 	 */
 	private function redirect_back() {
-		$fallback = admin_url( 'options-general.php?page=' . VC_Settings::PAGE );
+		$fallback = admin_url( 'options-general.php?page=' . VELOCA_Settings::PAGE );
 		$referer  = wp_get_referer();
-		$target   = ( $referer && false !== strpos( $referer, 'page=' . VC_Settings::PAGE ) ) ? $referer : $fallback;
+		$target   = ( $referer && false !== strpos( $referer, 'page=' . VELOCA_Settings::PAGE ) ) ? $referer : $fallback;
 
 		wp_safe_redirect( $target );
 		exit;
@@ -432,9 +432,15 @@ final class VC_Admin {
 	 * 后台通知。
 	 */
 	public function notices() {
+		// 通知只出现在插件设置页，避免占用仪表盘和其他后台页面（Guideline 11）。
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only page identifier.
+		if ( VELOCA_Settings::PAGE !== $page ) {
+			return;
+		}
+
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Settings API verified the nonce before this redirect.
-		if ( isset( $_GET['settings-updated'] ) && isset( $_GET['page'] ) && VC_Settings::PAGE === sanitize_key( wp_unslash( $_GET['page'] ) ) ) {
-			$version = (int) VC_Settings::get()['asset_version'];
+		if ( isset( $_GET['settings-updated'] ) ) {
+			$version = (int) VELOCA_Settings::get()['asset_version'];
 			printf(
 				'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
 				esc_html(
@@ -448,12 +454,12 @@ final class VC_Admin {
 		}
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
-		$notice = get_transient( 'vc_admin_notice' );
+		$notice = get_transient( 'veloca_admin_notice' );
 		if ( ! is_array( $notice ) || empty( $notice['message'] ) ) {
 			return;
 		}
 
-		delete_transient( 'vc_admin_notice' );
+		delete_transient( 'veloca_admin_notice' );
 		$type = ( isset( $notice['type'] ) && 'error' === $notice['type'] ) ? 'error' : 'success';
 
 		printf(
@@ -469,12 +475,12 @@ final class VC_Admin {
 	 * @param string $hook_suffix 当前后台页面钩子。
 	 */
 	public function enqueue( $hook_suffix ) {
-		if ( 'settings_page_' . VC_Settings::PAGE !== $hook_suffix ) {
+		if ( 'settings_page_' . VELOCA_Settings::PAGE !== $hook_suffix ) {
 			return;
 		}
 
-		wp_enqueue_style( 'vc-admin', VC_URL . 'admin/css/admin.css', array(), VC_VERSION );
-		wp_enqueue_script( 'vc-admin', VC_URL . 'admin/js/admin.js', array( 'jquery' ), VC_VERSION, true );
+		wp_enqueue_style( 'veloca-admin', VELOCA_URL . 'admin/css/admin.css', array(), VELOCA_VERSION );
+		wp_enqueue_script( 'veloca-admin', VELOCA_URL . 'admin/js/admin.js', array( 'jquery' ), VELOCA_VERSION, true );
 	}
 
 	/**
@@ -483,9 +489,9 @@ final class VC_Admin {
 	 * @return array
 	 */
 	private function status_rows() {
-		$root     = VC_Tools::cache_root();
-		$last     = (int) get_transient( 'vc_last_purge' );
-		$preload  = get_transient( 'vc_last_preload' );
+		$root     = VELOCA_Tools::cache_root();
+		$last     = (int) get_transient( 'veloca_last_purge' );
+		$preload  = get_transient( 'veloca_last_preload' );
 		$preload_text = __( '暂无', 'velocity-cache' );
 		if ( is_array( $preload ) && ! empty( $preload['time'] ) ) {
 			$preload_text = sprintf(
@@ -500,11 +506,11 @@ final class VC_Admin {
 		return array(
 			__( '缓存目录', 'velocity-cache' ) => $root,
 			__( '目录可写', 'velocity-cache' ) => wp_is_writable( $root ) ? __( '是', 'velocity-cache' ) : __( '否', 'velocity-cache' ),
-			__( '页面缓存文件', 'velocity-cache' ) => (string) VC_Tools::count_files( 'pages' ),
-			__( '优化资源文件', 'velocity-cache' ) => (string) VC_Tools::count_files( 'assets' ),
-			__( '资源版本号', 'velocity-cache' ) => 'v' . (int) VC_Settings::get()['asset_version'],
+			__( '页面缓存文件', 'velocity-cache' ) => (string) VELOCA_Tools::count_files( 'pages' ),
+			__( '优化资源文件', 'velocity-cache' ) => (string) VELOCA_Tools::count_files( 'assets' ),
+			__( '资源版本号', 'velocity-cache' ) => 'v' . (int) VELOCA_Settings::get()['asset_version'],
 			__( '上次清理时间', 'velocity-cache' ) => $last ? wp_date( 'Y-m-d H:i:s', $last ) : __( '暂无', 'velocity-cache' ),
-			__( '预加载队列', 'velocity-cache' ) => (string) VC_Preloader::queue_count(),
+			__( '预加载队列', 'velocity-cache' ) => (string) VELOCA_Preloader::queue_count(),
 			__( '上次预加载', 'velocity-cache' ) => $preload_text,
 		);
 	}

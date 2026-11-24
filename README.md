@@ -23,7 +23,7 @@
 | JS 加载策略 | 可选外链脚本 Defer；按明确规则 Delay JS，首次交互或 5 秒后恢复 |
 | CDN 重写 | 可选把本地 CSS/JS/图片/字体的 src/href 重写到 CDN，不改动态端点 |
 | 排除规则 | 按 URL、Cookie 名、CSS/JS handle 或 URL 关键词排除，支持 `*` 与 `?` 通配符 |
-| 版本控制 | 配置变更自动递增版本号，资源 URL 追加 `?ver=vcN`；可手动递增强制客户端刷新 |
+| 版本控制 | 配置变更自动递增版本号，资源 URL 追加 `?ver=velocaN`；可手动递增强制客户端刷新 |
 | 错误处理 | 异常捕获后回退原始 HTML；写盘失败记录到缓存目录日志 |
 
 ## 工作原理
@@ -107,17 +107,24 @@ velocity-cache.php              核心加载文件
 uninstall.php                   卸载清理
 readme.txt                      WordPress 插件说明
 includes/
-  class-vc-plugin.php           启动器
-  class-vc-settings.php         设置与版本控制
-  class-vc-admin.php            后台配置页面
-  class-vc-cache.php            页面缓存
-  class-vc-preloader.php        预加载队列与后台批处理
-  class-vc-optimizer.php        前端资源优化
-  class-vc-tools.php            路径、文件、日志与压缩工具
+  class-veloca-plugin.php           启动器
+  class-veloca-settings.php         设置与版本控制
+  class-veloca-admin.php            后台配置页面
+  class-veloca-cache.php            页面缓存
+  class-veloca-preloader.php        预加载队列与后台批处理
+  class-veloca-optimizer.php        前端资源优化
+  class-veloca-tools.php            路径、文件、日志与压缩工具
 admin/                          设置页视图与静态资源
 ```
 
 ## 更新记录
+
+### 1.5.0
+
+- 全量标识符改为 6 字符唯一前缀 `veloca_`。
+- 缓存与日志文件改为不可预测名称，目录写入拒绝访问规则（Apache/Nginx）。
+- 输出缓冲在 shutdown 显式关闭；后台通知限定在设置页。
+- sitemap 改用核心 API；修正子目录安装的本地资源路径映射。
 
 ### 1.4.0
 

@@ -7,10 +7,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
-final class VC_Settings {
+final class VELOCA_Settings {
 
-	const OPTION = 'vc_settings';
-	const GROUP  = 'vc_settings_group';
+	const OPTION = 'veloca_settings';
+	const GROUP  = 'veloca_settings_group';
 	const PAGE   = 'velocity-cache';
 
 	/**
@@ -142,7 +142,7 @@ final class VC_Settings {
 
 		foreach ( array( 'exclude_urls', 'exclude_cookies', 'exclude_css_handles', 'exclude_js_handles', 'preload_urls', 'delay_js_handles', 'async_css_excludes', 'conditional_css_rules' ) as $key ) {
 			$raw = isset( $input[ $key ] ) ? $input[ $key ] : '';
-			$clean[ $key ] = implode( "\n", VC_Tools::rule_list( is_scalar( $raw ) ? $raw : '' ) );
+			$clean[ $key ] = implode( "\n", VELOCA_Tools::rule_list( is_scalar( $raw ) ? $raw : '' ) );
 		}
 
 		// 配置变化时递增版本号；仅版本号变化时不重复递增。
@@ -171,8 +171,8 @@ final class VC_Settings {
 	 * @param mixed $new_value 新值。
 	 */
 	public static function after_update( $old_value, $new_value ) {
-		VC_Tools::ensure_dirs();
-		VC_Cache::purge_all( false );
-		VC_Tools::log( 'settings updated, caches purged' );
+		VELOCA_Tools::ensure_dirs();
+		VELOCA_Cache::purge_all( false );
+		VELOCA_Tools::log( 'settings updated, caches purged' );
 	}
 }

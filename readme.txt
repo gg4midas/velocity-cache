@@ -4,7 +4,7 @@ Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,7 +64,7 @@ Each rule has the form `handle | marker1, marker2`. If none of the markers appea
 
 = Does preloading contact external sites? =
 
-No. Preloading only requests URLs on the current site host. Custom URLs on other hosts are rejected, and sitemap discovery is limited to two common local sitemap paths.
+No. Preloading only requests URLs on the current site host. Custom URLs on other hosts are rejected, and sitemap discovery uses the WordPress core sitemap API when available, with a fallback to the common SEO-plugin sitemap index.
 
 = How do I clear all cached content? =
 
@@ -75,6 +75,15 @@ Use the cache tools on the plugin settings page. Page caches also expire accordi
 Cached HTML contains the nonce generated when the page was built. If a form fails because its nonce expired, purge the cache and reload the page.
 
 == Changelog ==
+
+= 1.5.0 =
+* Changed all internal prefixes to a unique 6-character prefix (veloca_) for functions, classes, constants, options, hooks, and stored data.
+* Hardened cache storage: unguessable cache and log filenames, deny-all directory rules, and Nginx deny rules for private files.
+* Closed the output buffer explicitly on shutdown instead of relying on PHP to flush it.
+* Limited admin notices to the plugin settings page.
+* Replaced the hardcoded core sitemap URL with get_sitemap_url() and fixed local asset path mapping for subdirectory installs.
+* Updated the plugin description to English.
+* Removed legacy predictably named log files on upgrade and hardened the cache root directory.
 
 = 1.4.0 =
 * Added optional conditional stylesheet unloading based on page markup markers, with conservative default rules for WooCommerce and WPForms.
@@ -111,6 +120,9 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 * Isolated logged-in cache keys and improved cache directory safeguards.
 
 == Upgrade Notice ==
+
+= 1.5.0 =
+Maintenance and security hardening release. Cache files are stored under new unguessable names after the update; purge the cache once from the settings page.
 
 = 1.4.0 =
 Conditional stylesheet unloading is disabled by default. Review the default rules before enabling it, and test shop, product, and non-shop pages.

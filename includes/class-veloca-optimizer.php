@@ -7,7 +7,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-final class VC_Optimizer {
+final class VELOCA_Optimizer {
 
 	/**
 	 * Conservative candidates for scripts that rarely affect above-the-fold rendering.
@@ -55,7 +55,7 @@ final class VC_Optimizer {
 		}
 
 		if ( ! empty( $settings['enable_html_minify'] ) ) {
-			$html = VC_Tools::minify_html( $html );
+			$html = VELOCA_Tools::minify_html( $html );
 		}
 
 		return $html;
@@ -104,11 +104,11 @@ final class VC_Optimizer {
 				$identity = $id_match[2];
 			}
 
-			if ( VC_Tools::match_rules( $identity, $exclude ) || VC_Tools::match_rules( $href, $exclude ) ) {
+			if ( VELOCA_Tools::match_rules( $identity, $exclude ) || VELOCA_Tools::match_rules( $href, $exclude ) ) {
 				continue;
 			}
 
-			$local = VC_Tools::local_file( $href );
+			$local = VELOCA_Tools::local_file( $href );
 			if ( '' === $local ) {
 				continue;
 			}
@@ -126,10 +126,10 @@ final class VC_Optimizer {
 			}
 
 			if ( $minify ) {
-				$css = VC_Tools::minify_css( $css );
+				$css = VELOCA_Tools::minify_css( $css );
 			}
 
-			$css = VC_Tools::absolutize_css( $css, $href );
+			$css = VELOCA_Tools::absolutize_css( $css, $href );
 
 			// 非合并模式需要把文件搬到缓存目录，必须改写相对 URL；
 			// 若改写后没有明显变小，就保留原始标签，避免负收益。
@@ -164,17 +164,17 @@ final class VC_Optimizer {
 			}
 
 			$hash = substr( md5( $href . '|' . $version . '|' . $fingerprint ), 0, 12 ) . '.css';
-			$out  = VC_Tools::sub_path( 'assets', 'css/' . $hash );
+			$out  = VELOCA_Tools::sub_path( 'assets', 'css/' . $hash );
 
 			if ( ! is_file( $out ) ) {
-				$written = VC_Tools::write_file( $out, $css );
+				$written = VELOCA_Tools::write_file( $out, $css );
 				if ( is_wp_error( $written ) ) {
-					VC_Tools::log( 'css asset write failed', array( 'error' => $written->get_error_message() ) );
+					VELOCA_Tools::log( 'css asset write failed', array( 'error' => $written->get_error_message() ) );
 					continue;
 				}
 			}
 
-			$url    = VC_Tools::cache_base_url() . 'assets/css/' . $hash . '?ver=vc' . $version;
+			$url    = VELOCA_Tools::cache_base_url() . 'assets/css/' . $hash . '?ver=veloca' . $version;
 			$newtag = substr_replace( $tag, esc_url( $url ), $href_match[2][1], strlen( $href_match[2][0] ) );
 			$replacements[] = array( 'offset' => $offset, 'length' => strlen( $tag ), 'value' => $newtag );
 		}
@@ -213,19 +213,19 @@ final class VC_Optimizer {
 				$parts        = wp_list_pluck( $group, 'css' );
 				$fingerprints = wp_list_pluck( $group, 'fingerprint' );
 				$hash         = substr( md5( implode( '|', $fingerprints ) . '|' . $version ), 0, 12 ) . '.css';
-				$out          = VC_Tools::sub_path( 'assets', 'css/' . $hash );
+				$out          = VELOCA_Tools::sub_path( 'assets', 'css/' . $hash );
 				$body         = implode( "\n", $parts );
 
 				if ( ! is_file( $out ) ) {
-					$written = VC_Tools::write_file( $out, $body );
+					$written = VELOCA_Tools::write_file( $out, $body );
 					if ( is_wp_error( $written ) ) {
-						VC_Tools::log( 'combined css write failed', array( 'error' => $written->get_error_message() ) );
+						VELOCA_Tools::log( 'combined css write failed', array( 'error' => $written->get_error_message() ) );
 						continue;
 					}
 				}
 
 				$first  = $group[0];
-				$url    = VC_Tools::cache_base_url() . 'assets/css/' . $hash . '?ver=vc' . $version;
+				$url    = VELOCA_Tools::cache_base_url() . 'assets/css/' . $hash . '?ver=veloca' . $version;
 				$newtag = substr_replace( $first['tag'], esc_url( $url ), $first['href_offset'], $first['href_length'] );
 
 				$replacements[] = array( 'offset' => $first['offset'], 'length' => $first['length'], 'value' => $newtag );
@@ -265,7 +265,7 @@ final class VC_Optimizer {
 		$result = preg_replace_callback(
 			'/(<style\b[^>]*>)(.*?)(<\/style>)/is',
 			static function ( $matches ) {
-				$css = VC_Tools::minify_css( $matches[2] );
+				$css = VELOCA_Tools::minify_css( $matches[2] );
 				return $matches[1] . $css . $matches[3];
 			},
 			$html
@@ -315,11 +315,11 @@ final class VC_Optimizer {
 			if ( preg_match( '/\bsrc\s*=\s*(["\'])(.*?)\1/i', $open, $src_match, PREG_OFFSET_CAPTURE ) ) {
 				$src_raw = $src_match[2][0];
 				$src     = html_entity_decode( $src_raw, ENT_QUOTES, get_option( 'blog_charset' ) );
-				if ( '' === $src || VC_Tools::match_rules( $src, $exclude ) || preg_match( '/^(?:data:|javascript:)/i', $src ) ) {
+				if ( '' === $src || VELOCA_Tools::match_rules( $src, $exclude ) || preg_match( '/^(?:data:|javascript:)/i', $src ) ) {
 					continue;
 				}
 
-				$local = VC_Tools::local_file( $src );
+				$local = VELOCA_Tools::local_file( $src );
 				if ( '' === $local ) {
 					continue;
 				}
@@ -329,23 +329,23 @@ final class VC_Optimizer {
 					continue;
 				}
 
-				$min = VC_Tools::minify_js( $js );
+				$min = VELOCA_Tools::minify_js( $js );
 				if ( strlen( $min ) >= strlen( $js ) * 0.98 ) {
 					continue;
 				}
 
 				$hash = substr( md5( $src . '|' . $version . '|' . md5( $min ) ), 0, 12 ) . '.js';
-				$out  = VC_Tools::sub_path( 'assets', 'js/' . $hash );
+				$out  = VELOCA_Tools::sub_path( 'assets', 'js/' . $hash );
 
 				if ( ! is_file( $out ) ) {
-					$written = VC_Tools::write_file( $out, $min );
+					$written = VELOCA_Tools::write_file( $out, $min );
 					if ( is_wp_error( $written ) ) {
-						VC_Tools::log( 'js asset write failed', array( 'error' => $written->get_error_message() ) );
+						VELOCA_Tools::log( 'js asset write failed', array( 'error' => $written->get_error_message() ) );
 						continue;
 					}
 				}
 
-				$url     = VC_Tools::cache_base_url() . 'assets/js/' . $hash . '?ver=vc' . $version;
+				$url     = VELOCA_Tools::cache_base_url() . 'assets/js/' . $hash . '?ver=veloca' . $version;
 				$newfull = substr_replace( $full, esc_url( $url ), $src_match[2][1], strlen( $src_raw ) );
 			} else {
 				$inline = substr( $full, strlen( $open ), -9 );
@@ -353,7 +353,7 @@ final class VC_Optimizer {
 					continue;
 				}
 
-				$min = VC_Tools::minify_js( $inline );
+				$min = VELOCA_Tools::minify_js( $inline );
 				if ( '' === $min || strlen( $min ) >= strlen( $inline ) * 0.98 ) {
 					continue;
 				}
@@ -396,7 +396,7 @@ final class VC_Optimizer {
 		}
 
 		$rules = array();
-		foreach ( VC_Tools::rule_list( $raw_rules ) as $line ) {
+		foreach ( VELOCA_Tools::rule_list( $raw_rules ) as $line ) {
 			$parts = explode( '|', $line, 2 );
 			$handle = trim( $parts[0] );
 			if ( '' === $handle || ! isset( $parts[1] ) ) {
@@ -435,8 +435,8 @@ final class VC_Optimizer {
 			foreach ( $rules as $rule ) {
 				$handle = $rule['handle'];
 				$is_target = ( $id === $handle || $id === $handle . '-css' )
-					|| VC_Tools::match_rules( $id, $handle )
-					|| ( '' !== $href && VC_Tools::match_rules( $href, $handle ) );
+					|| VELOCA_Tools::match_rules( $id, $handle )
+					|| ( '' !== $href && VELOCA_Tools::match_rules( $href, $handle ) );
 				if ( ! $is_target ) {
 					continue;
 				}
@@ -471,7 +471,7 @@ final class VC_Optimizer {
 		}
 
 		if ( ! empty( $settings['log_errors'] ) ) {
-			VC_Tools::log( 'conditional css removed', array( 'handles' => $removed ) );
+			VELOCA_Tools::log( 'conditional css removed', array( 'handles' => $removed ) );
 		}
 
 		return $html;
@@ -493,7 +493,7 @@ final class VC_Optimizer {
 			foreach ( $matches[0] as $found ) {
 				$tag    = $found[0];
 				$offset = $found[1];
-				if ( ! preg_match( '/\brel\s*=\s*(["\'])stylesheet\1/i', $tag ) || preg_match( '/\b(?:onload|data-vc-async)\b/i', $tag ) ) {
+				if ( ! preg_match( '/\brel\s*=\s*(["\'])stylesheet\1/i', $tag ) || preg_match( '/\b(?:onload|data-veloca-async)\b/i', $tag ) ) {
 					continue;
 				}
 				if ( preg_match( '/\bmedia\s*=\s*(["\'])(.*?)\1/i', $tag, $media_match ) && 'all' !== strtolower( trim( $media_match[2] ) ) ) {
@@ -508,13 +508,13 @@ final class VC_Optimizer {
 				if ( preg_match( '/\bid\s*=\s*(["\'])([^"\']+)\1/i', $tag, $id_match ) ) {
 					$identity = $id_match[2];
 				}
-				if ( VC_Tools::match_rules( $href, $excludes ) || VC_Tools::match_rules( $identity, $excludes ) ) {
+				if ( VELOCA_Tools::match_rules( $href, $excludes ) || VELOCA_Tools::match_rules( $identity, $excludes ) ) {
 					continue;
 				}
 
 				$async = preg_replace(
 					'/\brel\s*=\s*(["\'])stylesheet\1/i',
-					'rel="stylesheet" data-vc-async="1" media="print" onload="this.media=\'all\'"',
+					'rel="stylesheet" data-veloca-async="1" media="print" onload="this.media=\'all\'"',
 					$tag,
 					1
 				);
@@ -540,7 +540,7 @@ final class VC_Optimizer {
 
 		$critical = isset( $settings['critical_css'] ) ? trim( (string) $settings['critical_css'] ) : '';
 		if ( '' !== $critical ) {
-			$inline = '<style id="vc-critical-css">' . $critical . '</style>';
+			$inline = '<style id="veloca-critical-css">' . $critical . '</style>';
 			if ( preg_match( '/<head\b[^>]*>/i', $html, $head_match, PREG_OFFSET_CAPTURE ) ) {
 				$position = $head_match[0][1] + strlen( $head_match[0][0] );
 				$html     = substr_replace( $html, $inline, $position, 0 );
@@ -638,10 +638,10 @@ final class VC_Optimizer {
 			if ( $delay_enabled && false !== $inline_end && $inline_end > strlen( $open ) ) {
 				$body = substr( $full, strlen( $open ), $inline_end - strlen( $open ) );
 				$is_loader = preg_match( '/createElement\s*\(/i', $body ) && preg_match( '/(?:\.src\s*=|insertBefore\s*\(|appendChild\s*\()/i', $body );
-				if ( $is_loader && '' !== trim( $body ) && strlen( $body ) <= 8000 && VC_Tools::match_rules( $body, $delay_rules ) ) {
+				if ( $is_loader && '' !== trim( $body ) && strlen( $body ) <= 8000 && VELOCA_Tools::match_rules( $body, $delay_rules ) ) {
 					$without_type = preg_replace( '/\s+type\s*=\s*(["\']).*?\1/i', '', $open );
 					// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Inline loader is deferred inside final cached HTML after the enqueue phase.
-					$new_open = '<script type="velocity-lazy-inline" data-vc-delay="1" data-vc-inline="' . base64_encode( $body ) . '"' . substr( $without_type, 7 );
+					$new_open = '<script type="velocity-lazy-inline" data-veloca-delay="1" data-veloca-inline="' . base64_encode( $body ) . '"' . substr( $without_type, 7 );
 					$replacements[] = array( 'offset' => $offset, 'length' => strlen( $full ), 'value' => $new_open . '</script>' );
 					$delayed = true;
 					continue;
@@ -658,15 +658,15 @@ final class VC_Optimizer {
 				$identity = $id_match[2];
 			}
 
-			$delay = $delay_enabled && ( VC_Tools::match_rules( $src, $delay_rules ) || VC_Tools::match_rules( $identity, $delay_rules ) );
+			$delay = $delay_enabled && ( VELOCA_Tools::match_rules( $src, $delay_rules ) || VELOCA_Tools::match_rules( $identity, $delay_rules ) );
 			if ( $delay ) {
 				$without_src = substr_replace( $open, '', $src_match[0][1], strlen( $src_match[0][0] ) );
 				$without_src = preg_replace( '/\s+type\s*=\s*(["\']).*?\1/i', '', $without_src );
 				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Inline bootstrap is injected into final cached HTML after the enqueue phase.
-				$new_open = '<script type="velocity-lazy" data-vc-delay="1" data-vc-src="' . esc_attr( $src ) . '"' . substr( $without_src, 7 );
+				$new_open = '<script type="velocity-lazy" data-veloca-delay="1" data-veloca-src="' . esc_attr( $src ) . '"' . substr( $without_src, 7 );
 				$newfull     = $new_open . substr( $full, strlen( $open ) );
 				$delayed     = true;
-			} elseif ( ! empty( $settings['enable_js_defer'] ) && false === stripos( $src . ' ' . $identity, 'jquery' ) && ! VC_Tools::match_rules( $src, $exclude ) && ! VC_Tools::match_rules( $identity, $exclude ) ) {
+			} elseif ( ! empty( $settings['enable_js_defer'] ) && false === stripos( $src . ' ' . $identity, 'jquery' ) && ! VELOCA_Tools::match_rules( $src, $exclude ) && ! VELOCA_Tools::match_rules( $identity, $exclude ) ) {
 				$newfull = '<script defer="defer"' . substr( $full, 7 );
 			} else {
 				continue;
@@ -686,7 +686,7 @@ final class VC_Optimizer {
 		}
 
 		if ( $delayed ) {
-			$bootstrap = '<script id="vc-delay-bootstrap">(function(){var done=false;function load(){if(done)return;done=true;var nodes=document.querySelectorAll("script[data-vc-delay][data-vc-src],script[data-vc-delay][data-vc-inline]");Array.prototype.forEach.call(nodes,function(old){var s=document.createElement("script");Array.prototype.forEach.call(old.attributes,function(a){if(a.name!=="type"&&a.name!=="data-vc-delay"&&a.name!=="data-vc-src"&&a.name!=="data-vc-inline")s.setAttribute(a.name,a.value);});var inline=old.getAttribute("data-vc-inline");if(inline){var raw=atob(inline),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++){bytes[i]=raw.charCodeAt(i);}s.textContent=new TextDecoder().decode(bytes);}else{s.async=false;s.src=old.getAttribute("data-vc-src");}old.parentNode.insertBefore(s,old);old.parentNode.removeChild(old);});}["mousemove","keydown","scroll","touchstart","click"].forEach(function(e){document.addEventListener(e,load,{once:true,passive:true});});window.setTimeout(load,5000);})();</script>';
+			$bootstrap = '<script id="veloca-delay-bootstrap">(function(){var done=false;function load(){if(done)return;done=true;var nodes=document.querySelectorAll("script[data-veloca-delay][data-veloca-src],script[data-veloca-delay][data-veloca-inline]");Array.prototype.forEach.call(nodes,function(old){var s=document.createElement("script");Array.prototype.forEach.call(old.attributes,function(a){if(a.name!=="type"&&a.name!=="data-veloca-delay"&&a.name!=="data-veloca-src"&&a.name!=="data-veloca-inline")s.setAttribute(a.name,a.value);});var inline=old.getAttribute("data-veloca-inline");if(inline){var raw=atob(inline),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++){bytes[i]=raw.charCodeAt(i);}s.textContent=new TextDecoder().decode(bytes);}else{s.async=false;s.src=old.getAttribute("data-veloca-src");}old.parentNode.insertBefore(s,old);old.parentNode.removeChild(old);});}["mousemove","keydown","scroll","touchstart","click"].forEach(function(e){document.addEventListener(e,load,{once:true,passive:true});});window.setTimeout(load,5000);})();</script>';
 			$pos       = stripos( $html, '</body>' );
 			$html      = false === $pos ? $html . $bootstrap : substr_replace( $html, $bootstrap, $pos, 0 );
 		}

@@ -7,13 +7,13 @@
 
 defined( 'ABSPATH' ) || exit;
 
-final class VC_Preloader {
+final class VELOCA_Preloader {
 
-	const HOOK  = 'vc_preload_batch';
-	const BUILD = 'vc_preload_build';
-	const QUEUE = 'vc_preload_queue';
-	const LOCK  = 'vc_preload_lock';
-	const LAST  = 'vc_last_preload';
+	const HOOK  = 'veloca_preload_batch';
+	const BUILD = 'veloca_preload_build';
+	const QUEUE = 'veloca_preload_queue';
+	const LOCK  = 'veloca_preload_lock';
+	const LAST  = 'veloca_last_preload';
 	const BATCH = 5;
 	const LIMIT = 200;
 
@@ -41,8 +41,8 @@ final class VC_Preloader {
 	 * @return int|WP_Error 入队数量。
 	 */
 	public static function schedule( $urls = array() ) {
-		$settings = VC_Settings::get();
-		$input    = ! empty( $urls ) && is_array( $urls ) ? $urls : VC_Tools::rule_list( $settings['preload_urls'] );
+		$settings = VELOCA_Settings::get();
+		$input    = ! empty( $urls ) && is_array( $urls ) ? $urls : VELOCA_Tools::rule_list( $settings['preload_urls'] );
 
 		if ( empty( $input ) ) {
 			$input = self::discover_urls();
@@ -68,7 +68,7 @@ final class VC_Preloader {
 		update_option( self::QUEUE, $queue, false );
 
 		if ( empty( $queue ) ) {
-			return new WP_Error( 'vc_preload_empty', '没有可预加载的站内 URL。' );
+			return new WP_Error( 'veloca_preload_empty', '没有可预加载的站内 URL。' );
 		}
 
 		if ( ! wp_next_scheduled( self::HOOK ) ) {
@@ -110,7 +110,7 @@ final class VC_Preloader {
 					'timeout'     => 20,
 					'redirection' => 3,
 					'sslverify'   => true,
-					'headers'     => array( 'User-Agent' => 'Velocity-Cache-Preloader/' . VC_VERSION ),
+					'headers'     => array( 'User-Agent' => 'Velocity-Cache-Preloader/' . VELOCA_VERSION ),
 				)
 			);
 			$code = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
@@ -119,7 +119,7 @@ final class VC_Preloader {
 				$success++;
 			} else {
 				$failed++;
-				VC_Tools::log( 'preload request failed', array( 'url' => $url, 'error' => is_wp_error( $response ) ? $response->get_error_message() : $code ) );
+				VELOCA_Tools::log( 'preload request failed', array( 'url' => $url, 'error' => is_wp_error( $response ) ? $response->get_error_message() : $code ) );
 			}
 		}
 
@@ -170,8 +170,19 @@ final class VC_Preloader {
 	 * @return array
 	 */
 	private static function discover_urls() {
-		$candidates = array( home_url( '/wp-sitemap.xml' ), home_url( '/sitemap_index.xml' ) );
-		$urls       = array();
+		$candidates = array();
+
+		// 核心 sitemap 由 WordPress 解析，不在代码中硬编码其路径。
+		if ( function_exists( 'get_sitemap_url' ) ) {
+			$core_sitemap = get_sitemap_url( 'index' );
+			if ( is_string( $core_sitemap ) && '' !== $core_sitemap ) {
+				$candidates[] = $core_sitemap;
+			}
+		}
+
+		// 兼容常见 SEO 插件的 sitemap 索引。
+		$candidates[] = home_url( '/sitemap_index.xml' );
+		$urls         = array();
 
 		foreach ( $candidates as $sitemap ) {
 			$urls = array_merge( $urls, self::read_sitemap( $sitemap, 0 ) );
