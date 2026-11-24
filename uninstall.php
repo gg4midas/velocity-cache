@@ -52,20 +52,28 @@ function veloca_uninstall_remove_dir( $dir, $root ) {
  * @return void
  */
 function veloca_uninstall_cleanup() {
-	delete_option( 'veloca_settings' );
-	delete_option( 'veloca_cache_secret' );
-	delete_option( 'veloca_legacy_cleaned' );
-	delete_option( 'veloca_legacy_migrated' );
-	delete_option( 'veloca_cookie_rules_migrated' );
-	delete_option( 'veloca_preload_queue' );
-	delete_transient( 'veloca_admin_notice' );
-	delete_transient( 'veloca_plugin_notice' );
-	delete_transient( 'veloca_last_purge' );
-	delete_transient( 'veloca_preload_lock' );
-	delete_transient( 'veloca_last_preload' );
+	foreach ( array( 'veloca_settings', 'veloca_cache_secret', 'veloca_legacy_cleaned', 'veloca_legacy_migrated', 'veloca_cookie_rules_migrated', 'veloca_preload_queue' ) as $option ) {
+		delete_option( $option );
+	}
 
-	foreach ( array( 'veloca_preload_batch', 'veloca_preload_build' ) as $hook ) {
-		wp_clear_scheduled_hook( $hook );
+	foreach ( array( 'veloca_admin_notice', 'veloca_plugin_notice', 'veloca_last_purge', 'veloca_preload_lock', 'veloca_last_preload', 'veloca_preload_heal_check' ) as $transient ) {
+		delete_transient( $transient );
+	}
+
+	// 1.5.3 起的事件带随机参数，必须按事件实际参数逐个删除。
+	$cron = _get_cron_array();
+	if ( is_array( $cron ) ) {
+		foreach ( $cron as $timestamp => $events ) {
+			foreach ( array( 'veloca_preload_batch', 'veloca_preload_build' ) as $hook ) {
+				if ( ! isset( $events[ $hook ] ) || ! is_array( $events[ $hook ] ) ) {
+					continue;
+				}
+				foreach ( $events[ $hook ] as $event ) {
+					$args = isset( $event['args'] ) && is_array( $event['args'] ) ? $event['args'] : array();
+					wp_unschedule_event( $timestamp, $hook, $args );
+				}
+			}
+		}
 	}
 
 	$upload_dir = wp_upload_dir();

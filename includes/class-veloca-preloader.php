@@ -32,7 +32,7 @@ final class VELOCA_Preloader {
 	 * @param int $delay 延迟秒数。
 	 */
 	private static function reschedule( $delay = 5 ) {
-		wp_clear_scheduled_hook( self::HOOK );
+		VELOCA_Tools::clear_scheduled( self::HOOK );
 		wp_schedule_single_event( time() + max( 1, (int) $delay ), self::HOOK, array( wp_generate_password( 8, false, false ) ) );
 	}
 
@@ -200,11 +200,12 @@ final class VELOCA_Preloader {
 	 * 停用时移除队列和计划任务。
 	 */
 	public static function deactivate() {
-		wp_clear_scheduled_hook( self::HOOK );
-		wp_clear_scheduled_hook( self::BUILD );
+		VELOCA_Tools::clear_scheduled( self::HOOK );
+		VELOCA_Tools::clear_scheduled( self::BUILD );
 		delete_option( self::QUEUE );
 		delete_transient( self::LOCK );
 		delete_transient( 'veloca_preload_heal_check' );
+		delete_transient( self::LAST );
 	}
 
 	/**

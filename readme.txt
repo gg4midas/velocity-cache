@@ -4,7 +4,7 @@ Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.3
+Stable tag: 1.5.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,11 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 
 == Changelog ==
 
+= 1.5.4 =
+* Made deactivation clean up completely: removed the cache directory (including protection files), notices, transients and cron events using unique arguments, while keeping saved settings.
+* Fixed a self-retriggering bug where deactivating the plugin fired its own content-change hook and rebuilt the cache directory and a preload cron event.
+* Uninstall now also removes the preload self-healing transient and any cron events scheduled with unique arguments.
+
 = 1.5.3 =
 * Added WooCommerce cart cookies (woocommerce_items_in_cart, woocommerce_cart_hash) and comment_author_* to the default cache exclusions, with a one-time migration for existing settings.
 * Fixed stalled preload queues: cron events now use unique arguments to avoid WordPress deduplication, and a self-healing check reschedules batches if the queue is stranded.
@@ -135,6 +140,9 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 * Isolated logged-in cache keys and improved cache directory safeguards.
 
 == Upgrade Notice ==
+
+= 1.5.4 =
+Recommended for all sites. Deactivation and uninstall now leave no cache files or scheduled events behind.
 
 = 1.5.3 =
 Recommended for WooCommerce sites. Purge the cache once after upgrading so cart-specific pages are rebuilt with the new cookie exclusions.

@@ -11,6 +11,18 @@ final class VELOCA_Tools {
 
 	const CACHE_REL = '/cache/velocity-cache';
 
+	/** @var bool 插件自身停用过程中，抑制内容变更回调。 */
+	private static $deactivating = false;
+
+	/**
+	 * 是否正处于本插件停用流程。
+	 *
+	 * @return bool
+	 */
+	public static function is_deactivating() {
+		return self::$deactivating;
+	}
+
 	/**
 	 * 缓存与日志文件的不可预测前缀（每个站点固定，升级时复用）。
 	 *
@@ -53,6 +65,50 @@ final class VELOCA_Tools {
 	 *
 	 * 旧前缀只在本方法中临时拼接，用于升级兼容；插件其余部分一律使用唯一前缀。
 	 */
+	public static function clear_scheduled( $hook ) {
+		$cleared = 0;
+		$cron    = _get_cron_array();
+		if ( ! is_array( $cron ) ) {
+			return $cleared;
+		}
+
+		foreach ( $cron as $timestamp => $events ) {
+			if ( ! isset( $events[ $hook ] ) || ! is_array( $events[ $hook ] ) ) {
+				continue;
+			}
+			foreach ( $events[ $hook ] as $event ) {
+				$args = isset( $event['args'] ) && is_array( $event['args'] ) ? $event['args'] : array();
+				if ( wp_unschedule_event( $timestamp, $hook, $args ) ) {
+					$cleared++;
+				}
+			}
+		}
+
+		return $cleared;
+	}
+
+	/**
+	 * 删除整个插件缓存目录（含保护文件），用于停用与卸载。
+	 *
+	 * @return void
+	 */
+	public static function remove_cache_tree() {
+		self::purge_dir( 'pages' );
+		self::purge_dir( 'assets' );
+		self::purge_dir( 'logs' );
+
+		$root = self::cache_root();
+		foreach ( array( '.htaccess', 'index.php', 'nginx.conf' ) as $file ) {
+			wp_delete_file( $root . '/' . $file );
+		}
+		foreach ( array( 'assets/css', 'assets/js', 'assets', 'logs', 'pages' ) as $sub ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Removing empty directories inside the plugin-owned cache root.
+			@rmdir( $root . '/' . $sub );
+		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Removing the empty plugin-owned cache root.
+		@rmdir( $root );
+	}
+
 	public static function migrate_legacy_options() {
 		if ( get_option( 'veloca_legacy_migrated' ) ) {
 			return;
@@ -72,7 +128,7 @@ final class VELOCA_Tools {
 
 			// 旧队列恢复后重新安排新钩子上的后台批次，否则预加载不会继续执行。
 			if ( ! empty( $old_queue ) ) {
-				wp_clear_scheduled_hook( VELOCA_Preloader::HOOK );
+				self::clear_scheduled( VELOCA_Preloader::HOOK );
 				wp_schedule_single_event( time() + 3, VELOCA_Preloader::HOOK, array( wp_generate_password( 8, false, false ) ) );
 			}
 		}
@@ -82,7 +138,7 @@ final class VELOCA_Tools {
 		$old_build = wp_next_scheduled( $old . 'preload_build' );
 		if ( $old_build ) {
 			wp_unschedule_event( $old_build, $old . 'preload_build' );
-			wp_clear_scheduled_hook( VELOCA_Preloader::BUILD );
+			self::clear_scheduled( VELOCA_Preloader::BUILD );
 			wp_schedule_single_event( time() + 3, VELOCA_Preloader::BUILD, array( wp_generate_password( 8, false, false ) ) );
 		}
 		$old_batch = wp_next_scheduled( $old . 'preload_batch' );
@@ -153,13 +209,17 @@ final class VELOCA_Tools {
 	}
 
 	/**
-	 * 插件停用：清空缓存，保留设置。
+	 * 插件停用：清空缓存与运行时状态，保留用户设置。
 	 */
 	public static function deactivate() {
-		self::purge_dir( 'pages' );
-		self::purge_dir( 'assets' );
-		self::ensure_dirs();
-		self::log( 'plugin deactivated, caches purged' );
+		self::$deactivating = true;
+
+		self::remove_cache_tree();
+
+		delete_transient( 'veloca_admin_notice' );
+		delete_transient( 'veloca_plugin_notice' );
+		delete_transient( 'veloca_last_purge' );
+		delete_transient( 'veloca_last_preload' );
 	}
 
 	/**

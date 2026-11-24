@@ -408,6 +408,11 @@ final class VELOCA_Cache {
 	 * @param mixed $arg 钩子参数。
 	 */
 	public function on_content_change( $arg = null ) {
+		// 本插件自身停用时，跳过清理回调，避免重建目录和重新调度计划任务。
+		if ( VELOCA_Tools::is_deactivating() ) {
+			return;
+		}
+
 		if ( is_numeric( $arg ) ) {
 			$post_id = (int) $arg;
 			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {

@@ -116,6 +116,12 @@ admin/                          设置页视图与静态资源
 
 ## 更新记录
 
+### 1.5.4
+
+- 停用清理彻底化：删除整个缓存目录（含保护文件）、后台提示、transient 与带随机参数的 cron 事件，保留用户设置。
+- 修复停用本插件时自身内容变更回调被触发、导致目录与预加载事件重建的问题。
+- 卸载补删预加载自愈 transient 与带随机参数的计划任务。
+
 ### 1.5.3
 
 - 默认排除购物车 Cookie（woocommerce_items_in_cart、woocommerce_cart_hash）与 comment_author_*，并对已有配置做一次性补齐。
