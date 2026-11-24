@@ -55,6 +55,7 @@ function veloca_uninstall_cleanup() {
 	delete_option( 'veloca_settings' );
 	delete_option( 'veloca_cache_secret' );
 	delete_option( 'veloca_legacy_cleaned' );
+	delete_option( 'veloca_legacy_migrated' );
 	delete_option( 'veloca_preload_queue' );
 	delete_transient( 'veloca_admin_notice' );
 	delete_transient( 'veloca_last_purge' );

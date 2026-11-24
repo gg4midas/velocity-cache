@@ -49,9 +49,61 @@ final class VELOCA_Tools {
 	}
 
 	/**
+	 * 一次性把 1.4.0 及以前版本的旧前缀选项迁移到 veloca_ 前缀。
+	 *
+	 * 旧前缀只在本方法中临时拼接，用于升级兼容；插件其余部分一律使用唯一前缀。
+	 */
+	public static function migrate_legacy_options() {
+		if ( get_option( 'veloca_legacy_migrated' ) ) {
+			return;
+		}
+
+		$old = 'vc' . '_';
+
+		$old_settings = get_option( $old . 'settings', false );
+		if ( is_array( $old_settings ) && false === get_option( VELOCA_Settings::OPTION, false ) ) {
+			add_option( VELOCA_Settings::OPTION, wp_parse_args( $old_settings, VELOCA_Settings::defaults() ), '', 'yes' );
+		}
+		delete_option( $old . 'settings' );
+
+		$old_queue = get_option( $old . 'preload_queue', false );
+		if ( is_array( $old_queue ) && false === get_option( VELOCA_Preloader::QUEUE, false ) ) {
+			add_option( VELOCA_Preloader::QUEUE, array_values( $old_queue ), '', 'no' );
+
+			// 旧队列恢复后重新安排新钩子上的后台批次，否则预加载不会继续执行。
+			if ( ! empty( $old_queue ) && ! wp_next_scheduled( VELOCA_Preloader::HOOK ) ) {
+				wp_schedule_single_event( time() + 3, VELOCA_Preloader::HOOK );
+			}
+		}
+		delete_option( $old . 'preload_queue' );
+
+		// 旧 cron 事件迁移到新钩子，避免升级后残留无法执行的计划任务。
+		$old_build = wp_next_scheduled( $old . 'preload_build' );
+		if ( $old_build ) {
+			wp_unschedule_event( $old_build, $old . 'preload_build' );
+			if ( ! wp_next_scheduled( VELOCA_Preloader::BUILD ) ) {
+				wp_schedule_single_event( time() + 3, VELOCA_Preloader::BUILD );
+			}
+		}
+		$old_batch = wp_next_scheduled( $old . 'preload_batch' );
+		if ( $old_batch ) {
+			wp_unschedule_event( $old_batch, $old . 'preload_batch' );
+		}
+
+		delete_option( $old . 'preload_build' );
+		delete_option( $old . 'preload_lock' );
+		delete_option( $old . 'last_preload' );
+		delete_transient( $old . 'preload_lock' );
+
+		add_option( 'veloca_legacy_migrated', 1, '', 'no' );
+	}
+
+	/**
 	 * 一次性清理旧版本留下的可预测日志文件名。
 	 */
 	public static function cleanup_legacy() {
+		self::migrate_legacy_options();
+
 		if ( get_option( 'veloca_legacy_cleaned' ) ) {
 			return;
 		}

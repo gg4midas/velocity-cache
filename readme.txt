@@ -84,6 +84,7 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 * Replaced the hardcoded core sitemap URL with get_sitemap_url() and fixed local asset path mapping for subdirectory installs.
 * Updated the plugin description to English.
 * Removed legacy predictably named log files on upgrade and hardened the cache root directory.
+* Migrated settings and preload queue from legacy option names on upgrade so existing configurations are preserved.
 
 = 1.4.0 =
 * Added optional conditional stylesheet unloading based on page markup markers, with conservative default rules for WooCommerce and WPForms.
