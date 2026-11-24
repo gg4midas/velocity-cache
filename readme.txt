@@ -4,7 +4,7 @@ Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.2
+Stable tag: 1.5.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,10 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 
 == Changelog ==
 
+= 1.5.3 =
+* Added WooCommerce cart cookies (woocommerce_items_in_cart, woocommerce_cart_hash) and comment_author_* to the default cache exclusions, with a one-time migration for existing settings.
+* Fixed stalled preload queues: cron events now use unique arguments to avoid WordPress deduplication, and a self-healing check reschedules batches if the queue is stranded.
+
 = 1.5.2 =
 * Made multilingual support generic: language discovery now covers WPML, Polylang and third-party plugins through a filter, with no fixed set or maximum number of languages.
 * Cache keys, related purges and preloading now follow each language homepage for subdomain, directory and query-string language setups.
@@ -131,6 +135,9 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 * Isolated logged-in cache keys and improved cache directory safeguards.
 
 == Upgrade Notice ==
+
+= 1.5.3 =
+Recommended for WooCommerce sites. Purge the cache once after upgrading so cart-specific pages are rebuilt with the new cookie exclusions.
 
 = 1.5.2 =
 Recommended for all multilingual sites. Purge the cache once after upgrading so translated pages are rebuilt with the generic language handling.

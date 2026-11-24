@@ -56,6 +56,7 @@ function veloca_uninstall_cleanup() {
 	delete_option( 'veloca_cache_secret' );
 	delete_option( 'veloca_legacy_cleaned' );
 	delete_option( 'veloca_legacy_migrated' );
+	delete_option( 'veloca_cookie_rules_migrated' );
 	delete_option( 'veloca_preload_queue' );
 	delete_transient( 'veloca_admin_notice' );
 	delete_transient( 'veloca_plugin_notice' );
@@ -64,10 +65,7 @@ function veloca_uninstall_cleanup() {
 	delete_transient( 'veloca_last_preload' );
 
 	foreach ( array( 'veloca_preload_batch', 'veloca_preload_build' ) as $hook ) {
-		$timestamp = wp_next_scheduled( $hook );
-		if ( $timestamp ) {
-			wp_unschedule_event( $timestamp, $hook );
-		}
+		wp_clear_scheduled_hook( $hook );
 	}
 
 	$upload_dir = wp_upload_dir();

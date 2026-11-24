@@ -23,14 +23,62 @@ final class VELOCA_Preloader {
 	public static function init() {
 		add_action( self::HOOK, array( __CLASS__, 'process_batch' ) );
 		add_action( self::BUILD, array( __CLASS__, 'schedule' ) );
+		add_action( 'init', array( __CLASS__, 'maybe_heal_queue' ) );
+	}
+
+	/**
+	 * 重建下一批调度：先清空现存事件，再用唯一参数避免 WP 的 10 分钟去重把续期吞掉。
+	 *
+	 * @param int $delay 延迟秒数。
+	 */
+	private static function reschedule( $delay = 5 ) {
+		wp_clear_scheduled_hook( self::HOOK );
+		wp_schedule_single_event( time() + max( 1, (int) $delay ), self::HOOK, array( wp_generate_password( 8, false, false ) ) );
+	}
+
+	/**
+	 * 队列有积压但调度丢失时自愈，不依赖管理员访问特定页面。
+	 */
+	public static function maybe_heal_queue() {
+		if ( get_transient( 'veloca_preload_heal_check' ) ) {
+			return;
+		}
+		set_transient( 'veloca_preload_heal_check', 1, 5 * MINUTE_IN_SECONDS );
+
+		$queue = get_option( self::QUEUE, array() );
+		if ( ! is_array( $queue ) || empty( $queue ) || get_transient( self::LOCK ) ) {
+			return;
+		}
+		if ( ! self::has_scheduled( self::HOOK ) && ! self::has_scheduled( self::BUILD ) ) {
+			self::reschedule( 10 );
+		}
+	}
+
+	/**
+	 * 判断某个钩子是否已有待执行事件（不论参数）。
+	 *
+	 * @param string $hook 钩子名。
+	 * @return bool
+	 */
+	private static function has_scheduled( $hook ) {
+		$cron = _get_cron_array();
+		if ( ! is_array( $cron ) ) {
+			return false;
+		}
+		foreach ( $cron as $event ) {
+			if ( isset( $event[ $hook ] ) && is_array( $event[ $hook ] ) && ! empty( $event[ $hook ] ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
 	 * 把站点地图发现放到后台，避免清理缓存的当前请求被远程请求阻塞。
 	 */
 	public static function schedule_async() {
-		if ( ! wp_next_scheduled( self::BUILD ) && ! wp_next_scheduled( self::HOOK ) ) {
-			wp_schedule_single_event( time() + 3, self::BUILD );
+		if ( ! self::has_scheduled( self::BUILD ) && ! self::has_scheduled( self::HOOK ) ) {
+			wp_schedule_single_event( time() + 3, self::BUILD, array( wp_generate_password( 8, false, false ) ) );
 		}
 	}
 
@@ -71,8 +119,8 @@ final class VELOCA_Preloader {
 			return new WP_Error( 'veloca_preload_empty', '没有可预加载的站内 URL。' );
 		}
 
-		if ( ! wp_next_scheduled( self::HOOK ) ) {
-			wp_schedule_single_event( time() + 3, self::HOOK );
+		if ( ! self::has_scheduled( self::HOOK ) ) {
+			self::reschedule( 3 );
 		}
 
 		return count( $queue );
@@ -132,7 +180,7 @@ final class VELOCA_Preloader {
 			);
 		} else {
 			update_option( self::QUEUE, array_values( $remain ), false );
-			wp_schedule_single_event( time() + 5, self::HOOK );
+			self::reschedule( 5 );
 		}
 
 		delete_transient( self::LOCK );
@@ -152,16 +200,11 @@ final class VELOCA_Preloader {
 	 * 停用时移除队列和计划任务。
 	 */
 	public static function deactivate() {
-		$timestamp = wp_next_scheduled( self::HOOK );
-		if ( $timestamp ) {
-			wp_unschedule_event( $timestamp, self::HOOK );
-		}
-		$timestamp = wp_next_scheduled( self::BUILD );
-		if ( $timestamp ) {
-			wp_unschedule_event( $timestamp, self::BUILD );
-		}
+		wp_clear_scheduled_hook( self::HOOK );
+		wp_clear_scheduled_hook( self::BUILD );
 		delete_option( self::QUEUE );
 		delete_transient( self::LOCK );
+		delete_transient( 'veloca_preload_heal_check' );
 	}
 
 	/**

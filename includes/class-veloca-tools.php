@@ -71,8 +71,9 @@ final class VELOCA_Tools {
 			add_option( VELOCA_Preloader::QUEUE, array_values( $old_queue ), '', 'no' );
 
 			// 旧队列恢复后重新安排新钩子上的后台批次，否则预加载不会继续执行。
-			if ( ! empty( $old_queue ) && ! wp_next_scheduled( VELOCA_Preloader::HOOK ) ) {
-				wp_schedule_single_event( time() + 3, VELOCA_Preloader::HOOK );
+			if ( ! empty( $old_queue ) ) {
+				wp_clear_scheduled_hook( VELOCA_Preloader::HOOK );
+				wp_schedule_single_event( time() + 3, VELOCA_Preloader::HOOK, array( wp_generate_password( 8, false, false ) ) );
 			}
 		}
 		delete_option( $old . 'preload_queue' );
@@ -81,9 +82,8 @@ final class VELOCA_Tools {
 		$old_build = wp_next_scheduled( $old . 'preload_build' );
 		if ( $old_build ) {
 			wp_unschedule_event( $old_build, $old . 'preload_build' );
-			if ( ! wp_next_scheduled( VELOCA_Preloader::BUILD ) ) {
-				wp_schedule_single_event( time() + 3, VELOCA_Preloader::BUILD );
-			}
+			wp_clear_scheduled_hook( VELOCA_Preloader::BUILD );
+			wp_schedule_single_event( time() + 3, VELOCA_Preloader::BUILD, array( wp_generate_password( 8, false, false ) ) );
 		}
 		$old_batch = wp_next_scheduled( $old . 'preload_batch' );
 		if ( $old_batch ) {
@@ -99,10 +99,43 @@ final class VELOCA_Tools {
 	}
 
 	/**
+	 * 一次性补齐已保存配置中缺失的购物车/评论者 Cookie 排除规则。
+	 *
+	 * 只追加缺失项，保留用户已有的自定义规则与顺序。
+	 */
+	public static function migrate_cookie_rules() {
+		if ( get_option( 'veloca_cookie_rules_migrated' ) ) {
+			return;
+		}
+
+		$settings = get_option( VELOCA_Settings::OPTION, false );
+		if ( is_array( $settings ) ) {
+			$rules   = self::rule_list( isset( $settings['exclude_cookies'] ) ? $settings['exclude_cookies'] : '' );
+			$add     = array( 'woocommerce_items_in_cart', 'woocommerce_cart_hash', 'comment_author_*' );
+			$missing = array();
+
+			foreach ( $add as $rule ) {
+				if ( ! in_array( $rule, $rules, true ) ) {
+					$missing[] = $rule;
+				}
+			}
+
+			if ( ! empty( $missing ) ) {
+				$rules = array_slice( array_merge( $rules, $missing ), 0, 100 );
+				$settings['exclude_cookies'] = implode( "\n", $rules );
+				update_option( VELOCA_Settings::OPTION, $settings );
+			}
+		}
+
+		add_option( 'veloca_cookie_rules_migrated', 1, '', 'no' );
+	}
+
+	/**
 	 * 一次性清理旧版本留下的可预测日志文件名。
 	 */
 	public static function cleanup_legacy() {
 		self::migrate_legacy_options();
+		self::migrate_cookie_rules();
 
 		if ( get_option( 'veloca_legacy_cleaned' ) ) {
 			return;

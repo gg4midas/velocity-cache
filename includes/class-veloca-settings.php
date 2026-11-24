@@ -49,7 +49,7 @@ final class VELOCA_Settings {
 			'cache_query'       => 0,
 			'log_errors'        => 1,
 			'exclude_urls'      => "/wp-admin/\n/wp-login.php\n/wp-json/\n/xmlrpc.php\n/feed/",
-			'exclude_cookies'   => "wordpress_logged_in_*\nwp_woocommerce_session_*",
+			'exclude_cookies'   => "wordpress_logged_in_*\nwp_woocommerce_session_*\nwoocommerce_items_in_cart\nwoocommerce_cart_hash\ncomment_author_*",
 			'exclude_css_handles' => '',
 			'exclude_js_handles'  => '',
 			'asset_version'     => 1,

@@ -116,6 +116,11 @@ admin/                          设置页视图与静态资源
 
 ## 更新记录
 
+### 1.5.3
+
+- 默认排除购物车 Cookie（woocommerce_items_in_cart、woocommerce_cart_hash）与 comment_author_*，并对已有配置做一次性补齐。
+- 修复预加载队列卡死：cron 事件改用唯一参数避免 WordPress 去重，队列积压但无调度时自动自愈。
+
 ### 1.5.2
 
 - 多语言适配改为通用接口：WPML、Polylang 及第三方插件均可通过过滤器接入，不再限定语言种类和数量。
