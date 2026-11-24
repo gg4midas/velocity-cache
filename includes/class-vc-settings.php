@@ -37,8 +37,10 @@ final class VC_Settings {
 			'enable_delay_third_party' => 0,
 			'enable_async_css'  => 0,
 			'async_css_excludes' => '*astra-theme-css*',
-			'critical_css'      => '',
-			'enable_cdn'        => 0,
+		'critical_css'      => '',
+		'enable_conditional_css' => 0,
+		'conditional_css_rules' => "woocommerce-general | class=\"woocommerce, woocommerce-page, class=\"wc-\nwoocommerce-layout | class=\"woocommerce, woocommerce-page, class=\"wc-\nwoocommerce-smallscreen | class=\"woocommerce, woocommerce-page, class=\"wc-\nwpforms-classic-full | wpforms-container",
+		'enable_cdn'        => 0,
 			'cdn_url'           => '',
 			'preload_urls'      => '',
 			'delay_js_handles'  => '',
@@ -116,6 +118,7 @@ final class VC_Settings {
 			'enable_js_delay',
 			'enable_delay_third_party',
 			'enable_async_css',
+			'enable_conditional_css',
 			'enable_cdn',
 			'cache_logged_in',
 			'cache_query',
@@ -137,7 +140,7 @@ final class VC_Settings {
 		$critical_css = preg_replace( '/<\/?style\b[^>]*>/i', '', $critical_css );
 		$clean['critical_css'] = trim( substr( $critical_css, 0, 20480 ) );
 
-		foreach ( array( 'exclude_urls', 'exclude_cookies', 'exclude_css_handles', 'exclude_js_handles', 'preload_urls', 'delay_js_handles', 'async_css_excludes' ) as $key ) {
+		foreach ( array( 'exclude_urls', 'exclude_cookies', 'exclude_css_handles', 'exclude_js_handles', 'preload_urls', 'delay_js_handles', 'async_css_excludes', 'conditional_css_rules' ) as $key ) {
 			$raw = isset( $input[ $key ] ) ? $input[ $key ] : '';
 			$clean[ $key ] = implode( "\n", VC_Tools::rule_list( is_scalar( $raw ) ? $raw : '' ) );
 		}

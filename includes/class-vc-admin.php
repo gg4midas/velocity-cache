@@ -204,6 +204,7 @@ final class VC_Admin {
 				'enable_js_delay'  => array( __( '按规则 Delay JS', 'velocity-cache' ), __( '仅延迟下方规则匹配的脚本，首次交互或 5 秒后恢复执行。', 'velocity-cache' ) ),
 				'enable_delay_third_party' => array( __( '延迟常见第三方脚本', 'velocity-cache' ), __( '延迟 reCAPTCHA、GTag/GTM、Google Ads、Facebook Pixel 与 Cloudflare Beacon；首次交互或 5 秒后加载。', 'velocity-cache' ) ),
 				'enable_async_css' => array( __( '异步加载非关键 CSS', 'velocity-cache' ), __( '把非排除的样式表改为非阻塞加载，并提供 noscript 回退；核心主题样式默认排除。', 'velocity-cache' ) ),
+				'enable_conditional_css' => array( __( 'CSS 条件卸载', 'velocity-cache' ), __( '按下方规则，在页面不包含对应标记时移除整个样式表；属于整文件卸载，启用后请检查各页面类型。', 'velocity-cache' ) ),
 				'enable_cdn'       => array( __( 'CDN 地址重写', 'velocity-cache' ), __( '仅重写本地静态资源的 src/href，不改页面链接、srcset 或动态端点。', 'velocity-cache' ) ),
 			) as $key => $labels
 		) {
@@ -212,6 +213,7 @@ final class VC_Admin {
 		add_settings_field( 'lazyload_skip', __( '首屏图片跳过数', 'velocity-cache' ), array( $this, 'number_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'lazyload_skip', 'desc' => __( '前 N 张图片不延迟，默认 2，最大 20。', 'velocity-cache' ) ) );
 		add_settings_field( 'delay_js_handles', __( 'Delay JS 规则', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'delay_js_handles', 'desc' => __( '每行一条 handle 或 URL 规则，支持 * 与 ?；留空时不会延迟任何脚本。', 'velocity-cache' ) ) );
 		add_settings_field( 'async_css_excludes', __( 'CSS 异步排除', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'async_css_excludes', 'desc' => __( '默认排除 astra-theme-css；每行一个 handle 或 URL 规则，核心布局样式必须保留阻塞加载。', 'velocity-cache' ) ) );
+		add_settings_field( 'conditional_css_rules', __( 'CSS 条件卸载规则', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'conditional_css_rules', 'desc' => __( '每行：handle | 标记1, 标记2。页面 DOM 含任一标记则保留该样式表，否则移除；标记不区分大小写，判断时忽略 script/style 内容。', 'velocity-cache' ) ) );
 		add_settings_field( 'critical_css', __( '关键 CSS', 'velocity-cache' ), array( $this, 'textarea_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'critical_css', 'desc' => __( '可选。填写首屏关键 CSS，会注入 head；不要包含 style 标签。', 'velocity-cache' ) ) );
 		add_settings_field( 'cdn_url', __( 'CDN URL', 'velocity-cache' ), array( $this, 'text_field' ), VC_Settings::PAGE, 'vc_section_loading', array( 'key' => 'cdn_url', 'desc' => __( '例如 https://cdn.example.com，对应原站根路径并保留 wp-content/wp-includes 目录。', 'velocity-cache' ) ) );
 
