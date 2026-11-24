@@ -1,23 +1,23 @@
-.vc-wrap {
+.veloca-wrap {
 	max-width: 960px;
 }
 
-.vc-wrap .form-table th {
+.veloca-wrap .form-table th {
 	width: 220px;
 }
 
-.vc-tools {
+.veloca-tools {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 12px;
 	margin: 16px 0 24px;
 }
 
-.vc-tools form {
+.veloca-tools form {
 	margin: 0;
 }
 
-.vc-status th {
+.veloca-status th {
 	width: 220px;
 	text-align: left;
 }

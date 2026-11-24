@@ -7,15 +7,15 @@
 
 defined( 'ABSPATH' ) || exit;
 
-final class VC_Plugin {
+final class VELOCA_Plugin {
 
-	/** @var VC_Plugin|null */
+	/** @var VELOCA_Plugin|null */
 	private static $instance = null;
 
 	/**
 	 * 单例入口，由 plugins_loaded 触发。
 	 *
-	 * @return VC_Plugin
+	 * @return VELOCA_Plugin
 	 */
 	public static function instance() {
 		if ( null === self::$instance ) {
@@ -31,10 +31,11 @@ final class VC_Plugin {
 	 */
 	private function boot() {
 		// WordPress.org loads translations for the plugin text domain automatically.
-		VC_Cache::init();
-		VC_Preloader::init();
+		VELOCA_Tools::cleanup_legacy();
+		VELOCA_Cache::init();
+		VELOCA_Preloader::init();
 
-		$admin = new VC_Admin();
+		$admin = new VELOCA_Admin();
 		$admin->init();
 	}
 }

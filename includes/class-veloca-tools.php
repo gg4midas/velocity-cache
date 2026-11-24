@@ -7,20 +7,64 @@
 
 defined( 'ABSPATH' ) || exit;
 
-final class VC_Tools {
+final class VELOCA_Tools {
 
 	const CACHE_REL = '/cache/velocity-cache';
+
+	/**
+	 * 缓存与日志文件的不可预测前缀（每个站点固定，升级时复用）。
+	 *
+	 * @return string 24 位十六进制字符串。
+	 */
+	public static function cache_secret() {
+		$secret = (string) get_option( 'veloca_cache_secret', '' );
+		if ( preg_match( '/^[a-f0-9]{24}$/', $secret ) ) {
+			return $secret;
+		}
+
+		$secret = function_exists( 'random_bytes' ) ? bin2hex( random_bytes( 12 ) ) : wp_generate_password( 24, false, false );
+		$secret = substr( preg_replace( '/[^a-f0-9]/i', '', $secret ) . str_repeat( '0', 24 ), 0, 24 );
+
+		if ( false === get_option( 'veloca_cache_secret', false ) ) {
+			add_option( 'veloca_cache_secret', $secret, '', 'no' );
+		} else {
+			update_option( 'veloca_cache_secret', $secret, 'no' );
+		}
+
+		return $secret;
+	}
 
 	/**
 	 * 插件激活：初始化选项与缓存目录。
 	 */
 	public static function activate() {
-		if ( false === get_option( 'vc_settings', false ) ) {
-			add_option( 'vc_settings', VC_Settings::defaults(), '', 'yes' );
+		if ( false === get_option( 'veloca_settings', false ) ) {
+			add_option( 'veloca_settings', VELOCA_Settings::defaults(), '', 'yes' );
 		}
 
+		self::cache_secret();
+		self::cleanup_legacy();
 		self::ensure_dirs();
 		self::log( 'plugin activated' );
+	}
+
+	/**
+	 * 一次性清理旧版本留下的可预测日志文件名。
+	 */
+	public static function cleanup_legacy() {
+		if ( get_option( 'veloca_legacy_cleaned' ) ) {
+			return;
+		}
+
+		foreach ( array( 'errors.log', 'errors.log.old' ) as $name ) {
+			wp_delete_file( self::sub_path( 'logs', $name ) );
+		}
+
+		// 强制刷新所有目录的拒绝规则，覆盖旧版本只拒绝 PHP 的 .htaccess。
+		self::purge_dir( 'logs' );
+		self::ensure_dirs();
+
+		add_option( 'veloca_legacy_cleaned', 1, '', 'no' );
 	}
 
 	/**
@@ -93,11 +137,15 @@ final class VC_Tools {
 			@file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" );
 		}
 
-		if ( ! file_exists( $dir . '/.htaccess' ) ) {
-			@file_put_contents(
-				$dir . '/.htaccess',
-				"Options -Indexes\n<FilesMatch \"\\.(?:php|phtml|phar)$\">\n<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n</IfModule>\n</FilesMatch>\n"
-			);
+		// 默认拒绝目录内的一切直接访问；仅放行合并后的 CSS/JS（浏览器需要按 URL 加载）。
+		$htaccess = "Options -Indexes\n<IfModule mod_authz_core.c>\nRequire all denied\n<FilesMatch \"\\.(?:css|js)$\">\nRequire all granted\n</FilesMatch>\n</IfModule>\n<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n<FilesMatch \"\\.(?:css|js)$\">\nOrder allow,deny\nAllow from all\n</FilesMatch>\n</IfModule>\n";
+		if ( ! file_exists( $dir . '/.htaccess' ) || file_get_contents( $dir . '/.htaccess' ) !== $htaccess ) {
+			@file_put_contents( $dir . '/.htaccess', $htaccess );
+		}
+
+		// Nginx 用户：提供一份可直接 include 的拒绝规则，避免缓存 HTML/日志被下载。
+		if ( ! file_exists( $dir . '/nginx.conf' ) ) {
+			@file_put_contents( $dir . '/nginx.conf', "location ~* \\.(?:html|log|old|tmp|php)$ { deny all; }\n" );
 		}
 
 		return true;
@@ -108,6 +156,7 @@ final class VC_Tools {
 	 */
 	public static function ensure_dirs() {
 		$dirs = array(
+			self::cache_root(),
 			self::sub_path( 'pages' ),
 			self::sub_path( 'assets' ),
 			self::sub_path( 'assets', 'css' ),
@@ -130,7 +179,7 @@ final class VC_Tools {
 	public static function write_file( $file, $data ) {
 		$dir = dirname( $file );
 		if ( ! self::ensure_dir( $dir ) ) {
-			return new WP_Error( 'vc_dir_not_writable', '缓存目录不可写：' . $dir );
+			return new WP_Error( 'veloca_dir_not_writable', '缓存目录不可写：' . $dir );
 		}
 
 		$suffix = function_exists( 'random_bytes' ) ? bin2hex( random_bytes( 4 ) ) : wp_generate_password( 8, false, false );
@@ -138,13 +187,13 @@ final class VC_Tools {
 
 		if ( false === @file_put_contents( $tmp, $data, LOCK_EX ) ) {
 			wp_delete_file( $tmp );
-			return new WP_Error( 'vc_write_failed', '缓存文件写入失败：' . $file );
+			return new WP_Error( 'veloca_write_failed', '缓存文件写入失败：' . $file );
 		}
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Atomic rename is required for the cache write.
 		if ( ! @rename( $tmp, $file ) ) {
 			wp_delete_file( $tmp );
-			return new WP_Error( 'vc_rename_failed', '缓存文件替换失败：' . $file );
+			return new WP_Error( 'veloca_rename_failed', '缓存文件替换失败：' . $file );
 		}
 
 		return true;
@@ -165,12 +214,12 @@ final class VC_Tools {
 		$root = self::cache_root();
 		$dir  = rtrim( wp_normalize_path( $dir ), '/' );
 		if ( '' === $sub || strpos( $dir, $root . '/' ) !== 0 ) {
-			return new WP_Error( 'vc_unsafe_path', '拒绝清理非插件缓存目录。' );
+			return new WP_Error( 'veloca_unsafe_path', '拒绝清理非插件缓存目录。' );
 		}
 
 		$items = @scandir( $dir );
 		if ( ! is_array( $items ) ) {
-			return new WP_Error( 'vc_scan_failed', '无法读取缓存目录：' . $dir );
+			return new WP_Error( 'veloca_scan_failed', '无法读取缓存目录：' . $dir );
 		}
 
 		foreach ( $items as $item ) {
@@ -230,19 +279,21 @@ final class VC_Tools {
 	 * @param array  $context 附加上下文。
 	 */
 	public static function log( $message, $context = array() ) {
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 		if ( empty( $settings['log_errors'] ) ) {
 			return;
 		}
 
-		$file = self::sub_path( 'logs', 'errors.log' );
+		$file = self::sub_path( 'logs', 'events-' . self::cache_secret() . '.log' );
 		if ( ! self::ensure_dir( dirname( $file ) ) ) {
 			return;
 		}
 
 		if ( is_file( $file ) && filesize( $file ) > 1048576 ) {
+			// 轮转文件同样使用不可预测名称，避免被猜到直接访问。
+			$rotated = 'events-' . self::cache_secret() . '-' . gmdate( 'YmdHis' ) . '-' . substr( md5( uniqid( '', true ) ), 0, 12 ) . '.log';
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Log rotation inside the plugin-owned cache root.
-			@rename( $file, $file . '.old' );
+			@rename( $file, self::sub_path( 'logs', $rotated ) );
 		}
 
 		$extra = empty( $context ) ? '' : ' | ' . (string) wp_json_encode( $context );
@@ -312,7 +363,8 @@ final class VC_Tools {
 		$query  = $with_query ? (string) wp_parse_url( $uri, PHP_URL_QUERY ) : '';
 		$user   = is_user_logged_in() ? get_current_user_id() : 0;
 
-		return md5( $scheme . '|' . $host . '|' . $path . '|' . $query . '|user:' . $user );
+		// 混入站点私钥，避免缓存文件名被外部按 URL 推算后直接下载。
+		return hash( 'sha256', self::cache_secret() . '|' . $scheme . '|' . $host . '|' . $path . '|' . $query . '|user:' . $user );
 	}
 
 	/**
@@ -334,7 +386,7 @@ final class VC_Tools {
 		$path   = isset( $parts['path'] ) ? $parts['path'] : '/';
 		$query  = $with_query && isset( $parts['query'] ) ? $parts['query'] : '';
 
-		return md5( $scheme . '|' . $host . '|' . $path . '|' . $query . '|user:0' );
+		return hash( 'sha256', self::cache_secret() . '|' . $scheme . '|' . $host . '|' . $path . '|' . $query . '|user:0' );
 	}
 
 	/**
@@ -436,7 +488,16 @@ final class VC_Tools {
 			$candidates[] = WP_PLUGIN_DIR . substr( $path, strlen( rtrim( $plugin_path, '/' ) ) );
 		}
 
-		$candidates[] = ABSPATH . ltrim( $path, '/' );
+		// 子目录安装时 site_url() 自带路径前缀，必须去掉后再映射，避免拼出重复目录。
+		$site_path = wp_parse_url( site_url( '/' ), PHP_URL_PATH );
+		$relative  = $path;
+		if ( is_string( $site_path ) && '' !== $site_path && '/' !== $site_path ) {
+			$site_prefix = rtrim( $site_path, '/' );
+			if ( 0 === strpos( $relative, $site_prefix . '/' ) ) {
+				$relative = substr( $relative, strlen( $site_prefix ) );
+			}
+		}
+		$candidates[] = ABSPATH . ltrim( $relative, '/' );
 
 		$allowed = array_filter( array( realpath( WP_CONTENT_DIR ), realpath( WP_PLUGIN_DIR ), realpath( ABSPATH ) ) );
 		foreach ( $candidates as $candidate ) {

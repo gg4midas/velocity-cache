@@ -7,13 +7,16 @@
 
 defined( 'ABSPATH' ) || exit;
 
-final class VC_Cache {
+final class VELOCA_Cache {
 
-	/** @var VC_Cache|null */
+	/** @var VELOCA_Cache|null */
 	private static $instance = null;
 
 	/** @var bool */
 	private $buffering = false;
+
+	/** @var int */
+	private $buffer_level = 0;
 
 	/** @var bool */
 	private $served = false;
@@ -48,7 +51,7 @@ final class VC_Cache {
 	/**
 	 * 单例。
 	 *
-	 * @return VC_Cache
+	 * @return VELOCA_Cache
 	 */
 	public static function instance() {
 		if ( null === self::$instance ) {
@@ -62,11 +65,11 @@ final class VC_Cache {
 	 * 每个前端请求入口：先尝试命中缓存，再开启输出缓冲。
 	 */
 	public function handle_request() {
-		if ( ! VC_Tools::is_frontend() ) {
+		if ( ! VELOCA_Tools::is_frontend() ) {
 			return;
 		}
 
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 
 		// 全部功能关闭时不启用输出缓冲，避免无意义的内存与回调开销。
 		if ( empty( $settings['enable_cache'] ) && empty( $settings['enable_html_minify'] ) && empty( $settings['enable_css_minify'] ) && empty( $settings['enable_css_combine'] ) && empty( $settings['enable_js_minify'] ) ) {
@@ -99,11 +102,11 @@ final class VC_Cache {
 		$uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
 		$path = (string) wp_parse_url( $uri, PHP_URL_PATH );
 
-		if ( VC_Tools::match_rules( $path, $settings['exclude_urls'] ) || VC_Tools::match_rules( $uri, $settings['exclude_urls'] ) ) {
+		if ( VELOCA_Tools::match_rules( $path, $settings['exclude_urls'] ) || VELOCA_Tools::match_rules( $uri, $settings['exclude_urls'] ) ) {
 			return false;
 		}
 
-		if ( VC_Tools::has_excluded_cookie( $settings['exclude_cookies'] ) ) {
+		if ( VELOCA_Tools::has_excluded_cookie( $settings['exclude_cookies'] ) ) {
 			return false;
 		}
 
@@ -147,7 +150,7 @@ final class VC_Cache {
 	 * @return bool
 	 */
 	private function serve( $settings ) {
-		$key  = VC_Tools::request_key( ! empty( $settings['cache_query'] ) );
+		$key  = VELOCA_Tools::request_key( ! empty( $settings['cache_query'] ) );
 		$file = self::key_file( $key );
 
 		if ( ! is_file( $file ) ) {
@@ -184,7 +187,7 @@ final class VC_Cache {
 		if ( ! headers_sent() ) {
 			$visibility = is_user_logged_in() ? 'private' : 'public';
 			header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
-			header( 'X-VC-Cache: HIT' );
+			header( 'X-Veloca-Cache: HIT' );
 			header( $ttl > 0 ? 'Cache-Control: ' . $visibility . ', max-age=' . $ttl : 'Cache-Control: ' . $visibility );
 			if ( ! empty( $settings['enable_304'] ) ) {
 				header( 'ETag: ' . $etag );
@@ -236,8 +239,30 @@ final class VC_Cache {
 			return;
 		}
 
-		$this->buffering = true;
+		$this->buffering    = true;
+		$this->buffer_level = ob_get_level();
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- The buffer is explicitly closed in flush_buffer() on shutdown.
 		ob_start( array( $this, 'finalize' ) );
+		add_action( 'shutdown', array( $this, 'flush_buffer' ), PHP_INT_MAX );
+	}
+
+	/**
+	 * 在 shutdown 时显式关闭缓冲，避免留下未闭合的 buffer。
+	 * 逐层刷新到本插件开启的层级，finalize 回调会处理完整 HTML。
+	 */
+	public function flush_buffer() {
+		if ( ! $this->buffering ) {
+			return;
+		}
+
+		$this->buffering = false;
+
+		while ( ob_get_level() > $this->buffer_level ) {
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Closing our own buffer; failures simply end the loop.
+			if ( false === @ob_end_flush() ) {
+				break;
+			}
+		}
 	}
 
 	/**
@@ -247,13 +272,13 @@ final class VC_Cache {
 	 * @return string
 	 */
 	public function finalize( $html ) {
-		if ( $this->served || ! is_string( $html ) || '' === $html || ! VC_Tools::is_html_response() ) {
+		if ( $this->served || ! is_string( $html ) || '' === $html || ! VELOCA_Tools::is_html_response() ) {
 			return $html;
 		}
 
 		try {
-			$settings = VC_Settings::get();
-			$output   = VC_Optimizer::process( $html, $settings );
+			$settings = VELOCA_Settings::get();
+			$output   = VELOCA_Optimizer::process( $html, $settings );
 
 			if ( '' !== $output && $this->should_cache( $settings ) ) {
 				self::store( $output, $settings );
@@ -261,7 +286,7 @@ final class VC_Cache {
 
 			return '' === $output ? $html : $output;
 		} catch ( \Throwable $e ) {
-			VC_Tools::log( 'frontend optimization failed: ' . $e->getMessage() );
+			VELOCA_Tools::log( 'frontend optimization failed: ' . $e->getMessage() );
 			return $html;
 		}
 	}
@@ -273,16 +298,16 @@ final class VC_Cache {
 	 * @param array  $settings 设置。
 	 */
 	private static function store( $html, $settings ) {
-		$key  = VC_Tools::request_key( ! empty( $settings['cache_query'] ) );
+		$key  = VELOCA_Tools::request_key( ! empty( $settings['cache_query'] ) );
 		$file = self::key_file( $key );
 
 		if ( is_file( $file ) ) {
 			return;
 		}
 
-		$result = VC_Tools::write_file( $file, $html );
+		$result = VELOCA_Tools::write_file( $file, $html );
 		if ( is_wp_error( $result ) ) {
-			VC_Tools::log( 'page cache write failed', array( 'error' => $result->get_error_message() ) );
+			VELOCA_Tools::log( 'page cache write failed', array( 'error' => $result->get_error_message() ) );
 			return;
 		}
 
@@ -290,13 +315,13 @@ final class VC_Cache {
 			if ( function_exists( 'gzencode' ) ) {
 				$compressed = gzencode( $html, 6 );
 				if ( false !== $compressed ) {
-					VC_Tools::write_file( $file . '.gz', $compressed );
+					VELOCA_Tools::write_file( $file . '.gz', $compressed );
 				}
 			}
 			if ( function_exists( 'brotli_compress' ) ) {
 				$compressed = brotli_compress( $html, 6 );
 				if ( false !== $compressed ) {
-					VC_Tools::write_file( $file . '.br', $compressed );
+					VELOCA_Tools::write_file( $file . '.br', $compressed );
 				}
 			}
 		}
@@ -311,7 +336,7 @@ final class VC_Cache {
 	private static function key_file( $key ) {
 		$key = preg_replace( '/[^a-f0-9]/', '', $key );
 
-		return VC_Tools::sub_path( 'pages', substr( $key, 0, 2 ) . '/' . substr( $key, 2, 2 ) . '/' . $key . '.html' );
+		return VELOCA_Tools::sub_path( 'pages', substr( $key, 0, 2 ) . '/' . substr( $key, 2, 2 ) . '/' . $key . '.html' );
 	}
 
 	/**
@@ -334,25 +359,25 @@ final class VC_Cache {
 	 * @return true|WP_Error
 	 */
 	public static function purge_all( $with_assets = true ) {
-		$result = VC_Tools::purge_dir( 'pages' );
+		$result = VELOCA_Tools::purge_dir( 'pages' );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
 		if ( $with_assets ) {
-			$result = VC_Tools::purge_dir( 'assets' );
+			$result = VELOCA_Tools::purge_dir( 'assets' );
 			if ( is_wp_error( $result ) ) {
 				return $result;
 			}
 		}
 
-		set_transient( 'vc_last_purge', time(), DAY_IN_SECONDS );
-		VC_Tools::ensure_dirs();
-		VC_Tools::log( 'cache purge', array( 'assets' => $with_assets ? 1 : 0 ) );
+		set_transient( 'veloca_last_purge', time(), DAY_IN_SECONDS );
+		VELOCA_Tools::ensure_dirs();
+		VELOCA_Tools::log( 'cache purge', array( 'assets' => $with_assets ? 1 : 0 ) );
 
-		$settings = VC_Settings::get();
-		if ( ! empty( $settings['enable_preload'] ) && class_exists( 'VC_Preloader' ) ) {
-			VC_Preloader::schedule_async();
+		$settings = VELOCA_Settings::get();
+		if ( ! empty( $settings['enable_preload'] ) && class_exists( 'VELOCA_Preloader' ) ) {
+			VELOCA_Preloader::schedule_async();
 		}
 
 		return true;
@@ -364,14 +389,14 @@ final class VC_Cache {
 	 * @return true|WP_Error
 	 */
 	public static function bump_version() {
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 		$settings['asset_version'] = (int) $settings['asset_version'] + 1;
 
-		update_option( VC_Settings::OPTION, $settings );
+		update_option( VELOCA_Settings::OPTION, $settings );
 
 		$result = self::purge_all( true );
 		if ( ! is_wp_error( $result ) ) {
-			VC_Tools::log( 'asset version bumped', array( 'version' => $settings['asset_version'] ) );
+			VELOCA_Tools::log( 'asset version bumped', array( 'version' => $settings['asset_version'] ) );
 		}
 
 		return $result;
@@ -390,7 +415,7 @@ final class VC_Cache {
 			}
 		}
 
-		$settings = VC_Settings::get();
+		$settings = VELOCA_Settings::get();
 		if ( is_numeric( $arg ) && ! empty( $settings['enable_selective_purge'] ) && in_array( current_filter(), array( 'save_post', 'deleted_post' ), true ) ) {
 			self::purge_post( (int) $arg );
 			return;
@@ -410,7 +435,7 @@ final class VC_Cache {
 			return false;
 		}
 
-		$key  = VC_Tools::url_key( $url, false );
+		$key  = VELOCA_Tools::url_key( $url, false );
 		$file = $key ? self::key_file( $key ) : '';
 		if ( '' === $file || ! is_file( $file ) ) {
 			return false;
@@ -462,8 +487,8 @@ final class VC_Cache {
 			}
 		}
 
-		set_transient( 'vc_last_purge', time(), DAY_IN_SECONDS );
-		VC_Tools::log( 'selective cache purge', array( 'post_id' => $post_id, 'files' => $purged ) );
+		set_transient( 'veloca_last_purge', time(), DAY_IN_SECONDS );
+		VELOCA_Tools::log( 'selective cache purge', array( 'post_id' => $post_id, 'files' => $purged ) );
 	}
 
 	/**
@@ -476,11 +501,11 @@ final class VC_Cache {
 			return;
 		}
 
-		$url = wp_nonce_url( admin_url( 'admin-post.php?action=vc_purge_cache&scope=pages' ), 'vc_purge_cache' );
+		$url = wp_nonce_url( admin_url( 'admin-post.php?action=veloca_purge_cache&scope=pages' ), 'veloca_purge_cache' );
 
 		$bar->add_node(
 			array(
-				'id'    => 'vc-purge-cache',
+				'id'    => 'veloca-purge-cache',
 				'title' => esc_html__( '清理页面缓存', 'velocity-cache' ),
 				'href'  => $url,
 			)
