@@ -420,6 +420,36 @@ final class VELOCA_Tools {
 	}
 
 	/**
+	 * 本站允许的主机：主站加上 WPML 各语言域名（多域模式下子域也属于本站）。
+	 *
+	 * @return array 小写主机名列表。
+	 */
+	public static function allowed_hosts() {
+		$hosts = array();
+		$home  = wp_parse_url( home_url( '/' ) );
+		if ( is_array( $home ) && ! empty( $home['host'] ) ) {
+			$hosts[] = strtolower( $home['host'] );
+		}
+
+		if ( function_exists( 'icl_get_languages' ) ) {
+			$languages = icl_get_languages( 'skip_missing=0' );
+			if ( is_array( $languages ) ) {
+				foreach ( $languages as $language ) {
+					if ( empty( $language['url'] ) ) {
+						continue;
+					}
+					$parts = wp_parse_url( $language['url'] );
+					if ( is_array( $parts ) && ! empty( $parts['host'] ) ) {
+						$hosts[] = strtolower( $parts['host'] );
+					}
+				}
+			}
+		}
+
+		return array_values( array_unique( $hosts ) );
+	}
+
+	/**
 	 * 根据站内 URL 生成匿名缓存键，用于精确清理。
 	 *
 	 * @param string $url        完整站内 URL。
@@ -428,8 +458,7 @@ final class VELOCA_Tools {
 	 */
 	public static function url_key( $url, $with_query = false ) {
 		$parts = wp_parse_url( $url );
-		$home  = wp_parse_url( home_url( '/' ) );
-		if ( ! is_array( $parts ) || ! is_array( $home ) || empty( $parts['host'] ) || empty( $home['host'] ) || strtolower( $parts['host'] ) !== strtolower( $home['host'] ) ) {
+		if ( ! is_array( $parts ) || empty( $parts['host'] ) || ! in_array( strtolower( $parts['host'] ), self::allowed_hosts(), true ) ) {
 			return '';
 		}
 

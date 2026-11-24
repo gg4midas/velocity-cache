@@ -191,6 +191,15 @@ final class VELOCA_Preloader {
 			}
 		}
 
+		// 多域 WPML 的各语言子域不在主站 sitemap 里，显式加入首页保证预加载覆盖。
+		if ( function_exists( 'icl_get_languages' ) ) {
+			foreach ( (array) icl_get_languages( 'skip_missing=0' ) as $language ) {
+				if ( ! empty( $language['url'] ) ) {
+					$urls[] = rtrim( $language['url'], '/' ) . '/';
+				}
+			}
+		}
+
 		return $urls;
 	}
 
@@ -255,11 +264,10 @@ final class VELOCA_Preloader {
 	 */
 	private static function is_local_url( $url ) {
 		$parts = wp_parse_url( $url );
-		$home  = wp_parse_url( home_url( '/' ) );
-		if ( ! is_array( $parts ) || ! is_array( $home ) || empty( $parts['host'] ) || empty( $home['host'] ) ) {
+		if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
 			return false;
 		}
 
-		return strtolower( $parts['host'] ) === strtolower( $home['host'] ) && in_array( isset( $parts['scheme'] ) ? $parts['scheme'] : '', array( 'http', 'https' ), true );
+		return in_array( strtolower( $parts['host'] ), VELOCA_Tools::allowed_hosts(), true ) && in_array( isset( $parts['scheme'] ) ? $parts['scheme'] : '', array( 'http', 'https' ), true );
 	}
 }

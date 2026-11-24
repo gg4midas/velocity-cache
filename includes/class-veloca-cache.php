@@ -416,8 +416,20 @@ final class VELOCA_Cache {
 		}
 
 		$settings = VELOCA_Settings::get();
-		if ( is_numeric( $arg ) && ! empty( $settings['enable_selective_purge'] ) && in_array( current_filter(), array( 'save_post', 'deleted_post' ), true ) ) {
+		$hook     = current_filter();
+		if ( is_numeric( $arg ) && ! empty( $settings['enable_selective_purge'] ) && in_array( $hook, array( 'save_post', 'deleted_post' ), true ) ) {
 			self::purge_post( (int) $arg );
+			return;
+		}
+
+		// 其他插件启用或停用也会清缓存，在插件列表页留一次性提示。
+		if ( in_array( $hook, array( 'activated_plugin', 'deactivated_plugin' ), true ) ) {
+			$result = self::purge_all( false );
+			if ( ! is_wp_error( $result ) ) {
+				$action = 'activated_plugin' === $hook ? __( '启用', 'velocity-cache' ) : __( '停用', 'velocity-cache' );
+				/* translators: %s: activated or deactivated. */
+				set_transient( 'veloca_plugin_notice', sprintf( __( 'Velocity Cache 已因插件%s刷新页面缓存。', 'velocity-cache' ), $action ), 300 );
+			}
 			return;
 		}
 
@@ -478,6 +490,9 @@ final class VELOCA_Cache {
 			$links[] = get_year_link( gmdate( 'Y', $time ) );
 			$links[] = get_month_link( gmdate( 'Y', $time ), gmdate( 'm', $time ) );
 			$links[] = get_day_link( gmdate( 'Y', $time ), gmdate( 'm', $time ), gmdate( 'd', $time ) );
+
+			// WPML：同 trid 的译文在子域下各自持有独立缓存，必须一并清理。
+			$links = array_merge( $links, self::wpml_sibling_links( $post ) );
 		}
 
 		$purged = 0;
@@ -489,6 +504,76 @@ final class VELOCA_Cache {
 
 		set_transient( 'veloca_last_purge', time(), DAY_IN_SECONDS );
 		VELOCA_Tools::log( 'selective cache purge', array( 'post_id' => $post_id, 'files' => $purged ) );
+	}
+
+	/**
+	 * 找出 WPML 同一 trid 下所有译文的本地 URL，包含各语言首页与归档。
+	 *
+	 * @param WP_Post $post 当前文章。
+	 * @return array 待清理的 URL 列表。
+	 */
+	private static function wpml_sibling_links( $post ) {
+		$links = array();
+		if ( ! $post || ! function_exists( 'icl_get_languages' ) ) {
+			return $links;
+		}
+
+		global $wpdb;
+		$table = $wpdb->prefix . 'icl_translations';
+		$row   = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT trid FROM {$table} WHERE element_id = %d AND element_type = %s LIMIT 1",
+				$post->ID,
+				'post_' . $post->post_type
+			)
+		);
+		if ( ! $row || ! isset( $row->trid ) ) {
+			return $links;
+		}
+
+		$rows      = $wpdb->get_results( $wpdb->prepare( "SELECT element_id, language_code FROM {$table} WHERE trid = %d", $row->trid ) );
+		$languages = (array) icl_get_languages( 'skip_missing=0' );
+		if ( ! is_array( $rows ) ) {
+			return $links;
+		}
+
+		foreach ( $rows as $item ) {
+			$element_id = (int) $item->element_id;
+			$language   = (string) $item->language_code;
+			if ( $element_id < 1 ) {
+				continue;
+			}
+
+			// get_permalink() 在后台上下文总是返回当前语言域名，需要用 WPML 过滤器换到译文语言。
+			$url = get_permalink( $element_id );
+			if ( $url ) {
+				$links[] = apply_filters( 'wpml_permalink', $url, $language );
+			}
+
+			if ( isset( $languages[ $language ] ) && ! empty( $languages[ $language ]['url'] ) ) {
+				$links[] = $languages[ $language ]['url'];
+			}
+
+			$archive = get_post_type_archive_link( $post->post_type );
+			if ( $archive ) {
+				$links[] = apply_filters( 'wpml_permalink', $archive, $language );
+			}
+
+			foreach ( get_object_taxonomies( $post ) as $taxonomy ) {
+				$terms = get_the_terms( $element_id, $taxonomy );
+				if ( ! is_array( $terms ) ) {
+					continue;
+				}
+				foreach ( $terms as $term ) {
+					$term_link = get_term_link( $term );
+					if ( ! is_wp_error( $term_link ) ) {
+						$links[] = apply_filters( 'wpml_permalink', $term_link, $language );
+					}
+				}
+			}
+		}
+
+		return $links;
 	}
 
 	/**

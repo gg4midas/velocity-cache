@@ -4,7 +4,7 @@ Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,11 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 
 == Changelog ==
 
+= 1.5.1 =
+* Fixed selective cache purge for WPML: translations sharing a trid now have their own language-domain URLs cleared when the source post changes.
+* Page cache keys and the preloader now recognize all WPML language domains in multi-domain setups, and preloading covers every language homepage.
+* Added a one-time notice on the plugins page when another plugin is activated or deactivated and the page cache is refreshed.
+
 = 1.5.0 =
 * Changed all internal prefixes to a unique 6-character prefix (veloca_) for functions, classes, constants, options, hooks, and stored data.
 * Hardened cache storage: unguessable cache and log filenames, deny-all directory rules, and Nginx deny rules for private files.
@@ -121,6 +126,9 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 * Isolated logged-in cache keys and improved cache directory safeguards.
 
 == Upgrade Notice ==
+
+= 1.5.1 =
+Recommended for WPML sites using language subdomains. Purges the cache once after upgrading to rebuild translated page caches.
 
 = 1.5.0 =
 Maintenance and security hardening release. Cache files are stored under new unguessable names after the update; purge the cache once from the settings page.

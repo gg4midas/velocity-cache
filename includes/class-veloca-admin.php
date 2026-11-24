@@ -432,9 +432,28 @@ final class VELOCA_Admin {
 	 * 后台通知。
 	 */
 	public function notices() {
-		// 通知只出现在插件设置页，避免占用仪表盘和其他后台页面（Guideline 11）。
+		// 通知只出现在插件设置页和插件列表页，避免占用仪表盘和其他后台页面（Guideline 11）。
 		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only page identifier.
-		if ( VELOCA_Settings::PAGE !== $page ) {
+		global $pagenow;
+		$is_settings = ( VELOCA_Settings::PAGE === $page );
+		$is_plugins  = ( isset( $pagenow ) && 'plugins.php' === $pagenow );
+
+		if ( ! $is_settings && ! $is_plugins ) {
+			return;
+		}
+
+		if ( $is_plugins ) {
+			$plugin_notice = get_transient( 'veloca_plugin_notice' );
+			if ( is_string( $plugin_notice ) && '' !== $plugin_notice ) {
+				delete_transient( 'veloca_plugin_notice' );
+				printf(
+					'<div class="notice notice-info is-dismissible"><p>%s</p></div>',
+					esc_html( $plugin_notice )
+				);
+			}
+		}
+
+		if ( ! $is_settings ) {
 			return;
 		}
 

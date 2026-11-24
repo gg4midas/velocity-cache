@@ -58,6 +58,7 @@ function veloca_uninstall_cleanup() {
 	delete_option( 'veloca_legacy_migrated' );
 	delete_option( 'veloca_preload_queue' );
 	delete_transient( 'veloca_admin_notice' );
+	delete_transient( 'veloca_plugin_notice' );
 	delete_transient( 'veloca_last_purge' );
 	delete_transient( 'veloca_preload_lock' );
 	delete_transient( 'veloca_last_preload' );
