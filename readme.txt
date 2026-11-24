@@ -4,7 +4,7 @@ Tags: cache, page-cache, minify, performance, optimization
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,6 +22,7 @@ Velocity Cache is an independent WordPress performance plugin. It generates stat
 * Asset optimization: conservative HTML, CSS, and JavaScript minification. Local CSS files may be combined only when they are adjacent and share the same media attribute, preserving cascade order.
 * Loading optimization: native image and iframe lazy loading, configurable first-image skipping, optional script deferral, rule-based delayed JavaScript, and ready-made presets for common third-party scripts.
 * CSS delivery: optional non-blocking CSS loading with a sensible default exclusion for the core theme stylesheet, noscript fallbacks, and a field for custom critical CSS.
+* Conditional stylesheets: optionally remove a whole stylesheet on pages whose markup does not contain a given marker, with conservative default rules for WooCommerce and WPForms.
 * CDN rewriting: optionally rewrite local static asset URLs while leaving page links and dynamic endpoints unchanged.
 * Versioning: each settings change increments the asset version and refreshes cached pages.
 * Safety: capability checks, nonces, input sanitization, output escaping, path whitelists, atomic cache writes, and an error log.
@@ -57,6 +58,10 @@ The preset matches common reCAPTCHA, Google Tag Manager, Google Analytics, Googl
 
 Eligible stylesheets are changed to load without blocking rendering, with a noscript fallback. The default exclusion keeps the Astra core stylesheet blocking. Custom critical CSS can be injected into the document head. Disable the option if a theme depends on immediate stylesheet availability.
 
+= How does conditional stylesheet unloading work? =
+
+Each rule has the form `handle | marker1, marker2`. If none of the markers appear in the page markup, the matching stylesheet is removed from that page. Script and style contents are ignored when markers are checked, so inline CSS selectors do not count as markup. This removes whole files, not individual rules: enable it only after checking each page type, and disable it if a layout depends on a removed stylesheet.
+
 = Does preloading contact external sites? =
 
 No. Preloading only requests URLs on the current site host. Custom URLs on other hosts are rejected, and sitemap discovery is limited to two common local sitemap paths.
@@ -70,6 +75,11 @@ Use the cache tools on the plugin settings page. Page caches also expire accordi
 Cached HTML contains the nonce generated when the page was built. If a form fails because its nonce expired, purge the cache and reload the page.
 
 == Changelog ==
+
+= 1.4.0 =
+* Added optional conditional stylesheet unloading based on page markup markers, with conservative default rules for WooCommerce and WPForms.
+* Marker checks ignore script and style contents to avoid false matches from inline CSS selectors.
+* The feature is disabled by default.
 
 = 1.3.1 =
 * Fixed rule matching across line breaks for multiline inline script loaders.
@@ -102,5 +112,5 @@ Cached HTML contains the nonce generated when the page was built. If a form fail
 
 == Upgrade Notice ==
 
-= 1.2.1 =
-Submission readiness update. No new features or configuration changes are required.
+= 1.4.0 =
+Conditional stylesheet unloading is disabled by default. Review the default rules before enabling it, and test shop, product, and non-shop pages.

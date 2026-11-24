@@ -30,6 +30,10 @@ final class VC_Optimizer {
 			$html = self::optimize_css( $html, $settings );
 		}
 
+		if ( ! empty( $settings['enable_conditional_css'] ) ) {
+			$html = self::unload_conditional_css( $html, $settings );
+		}
+
 		if ( ! empty( $settings['enable_async_css'] ) ) {
 			$html = self::optimize_css_loading( $html, $settings );
 		}
@@ -369,6 +373,105 @@ final class VC_Optimizer {
 
 		foreach ( $replacements as $replacement ) {
 			$html = substr_replace( $html, $replacement['value'], $replacement['offset'], $replacement['length'] );
+		}
+
+		return $html;
+	}
+
+	/**
+	 * 按页面内容标记决定是否加载某个样式表（整文件卸载）。
+	 *
+	 * 规则每行一条：`handle | 标记1, 标记2`。页面 DOM 中任一标记命中则保留，
+	 * 全部未命中则移除该样式表。判断时剔除 script/style 内容，避免内联 CSS
+	 * 里的选择器被误当成 DOM 标记。
+	 *
+	 * @param string $html     HTML。
+	 * @param array  $settings 设置。
+	 * @return string
+	 */
+	private static function unload_conditional_css( $html, $settings ) {
+		$raw_rules = isset( $settings['conditional_css_rules'] ) ? $settings['conditional_css_rules'] : '';
+		if ( '' === trim( (string) $raw_rules ) ) {
+			return $html;
+		}
+
+		$rules = array();
+		foreach ( VC_Tools::rule_list( $raw_rules ) as $line ) {
+			$parts = explode( '|', $line, 2 );
+			$handle = trim( $parts[0] );
+			if ( '' === $handle || ! isset( $parts[1] ) ) {
+				continue;
+			}
+			$markers = array_values( array_filter( array_map( 'trim', explode( ',', $parts[1] ) ) ) );
+			if ( $markers ) {
+				$rules[] = array( 'handle' => $handle, 'markers' => $markers );
+			}
+		}
+		if ( ! $rules ) {
+			return $html;
+		}
+
+		$dom = preg_replace( '#<(script|style)\b[^>]*>.*?</\1>#is', '', $html );
+		$dom = is_string( $dom ) ? strtolower( $dom ) : strtolower( $html );
+
+		$count = preg_match_all( '/<link\b[^>]*>/i', $html, $matches, PREG_OFFSET_CAPTURE );
+		if ( ! $count ) {
+			return $html;
+		}
+
+		$replacements = array();
+		$removed      = array();
+		foreach ( $matches[0] as $found ) {
+			$tag = $found[0];
+			if ( ! preg_match( '/\brel\s*=\s*(["\'])stylesheet\1/i', $tag ) ) {
+				continue;
+			}
+			if ( ! preg_match( '/\bid\s*=\s*(["\'])(.*?)\1/i', $tag, $id_match ) ) {
+				continue;
+			}
+			$id   = $id_match[2];
+			$href = preg_match( '/\bhref\s*=\s*(["\'])(.*?)\1/i', $tag, $href_match ) ? $href_match[2] : '';
+
+			foreach ( $rules as $rule ) {
+				$handle = $rule['handle'];
+				$is_target = ( $id === $handle || $id === $handle . '-css' )
+					|| VC_Tools::match_rules( $id, $handle )
+					|| ( '' !== $href && VC_Tools::match_rules( $href, $handle ) );
+				if ( ! $is_target ) {
+					continue;
+				}
+
+				$keep = false;
+				foreach ( $rule['markers'] as $marker ) {
+					if ( '' !== $marker && false !== strpos( $dom, strtolower( $marker ) ) ) {
+						$keep = true;
+						break;
+					}
+				}
+				if ( ! $keep ) {
+					$replacements[] = array( 'offset' => $found[1], 'length' => strlen( $tag ) );
+					$removed[]      = $id;
+				}
+				break;
+			}
+		}
+
+		if ( ! $replacements ) {
+			return $html;
+		}
+
+		usort(
+			$replacements,
+			static function ( $a, $b ) {
+				return $b['offset'] <=> $a['offset'];
+			}
+		);
+		foreach ( $replacements as $replacement ) {
+			$html = substr_replace( $html, '', $replacement['offset'], $replacement['length'] );
+		}
+
+		if ( ! empty( $settings['log_errors'] ) ) {
+			VC_Tools::log( 'conditional css removed', array( 'handles' => $removed ) );
 		}
 
 		return $html;

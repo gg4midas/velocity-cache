@@ -3,7 +3,7 @@
  * Plugin Name:       Velocity Cache
  * Plugin URI:        https://github.com/gg4midas/velocity-cache
  * Description:       轻量级 WordPress 性能优化插件：页面缓存、HTML 压缩、CSS 压缩与合并、JavaScript 压缩，带版本控制、排除规则与缓存清理。
- * Version:           1.3.1
+ * Version:           1.4.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            gg4midas
@@ -18,7 +18,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'VC_VERSION', '1.3.1' );
+define( 'VC_VERSION', '1.4.0' );
 define( 'VC_FILE', __FILE__ );
 define( 'VC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'VC_URL', plugin_dir_url( __FILE__ ) );
